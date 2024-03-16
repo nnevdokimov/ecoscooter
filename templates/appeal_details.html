@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Детали обращения</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<div class="header">
+    <a href="/">Служба поддержки EcoScooter</a>
+    <a href="/logout" class="logout-link">Выйти</a>
+</div>
+<div class="appeal-detail-container">
+    <h2>Обращение №{{ appeal.appeal_id }}</h2>
+    <p><strong>Статус:</strong> В обработке</p>
+
+    <form action="{{ url_for('update_appeal_type', appeal_id=appeal.appeal_id) }}" method="post">
+        <label for="appeal_type">Изменить тип обращения:</label>
+        <select name="appeal_type" id="appeal_type">
+            <option value="Замечание">Замечание</option>
+            <option value="Рекомендация">Рекомендация</option>
+        </select>
+        <button type="submit">Обновить</button>
+    </form>
+
+    <div class="chat-window" id="chat-window">
+        <!-- Сообщение пользователя сделаем голубым -->
+        <div class="chat-message user-message">
+            <p>{{ appeal.message }}</p>
+        </div>
+
+        <!-- Сообщения поддержки сделаем зеленым -->
+        {% for response in responses %}
+        {% if response.message %}
+        <div class="chat-message support-message">
+            <p>{{ response.message }}</p>
+            {% if response.promo_code %}
+            <p>Промокод: {{ response.promo_code }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="send-message-container">
+        <textarea id="message-text" rows="3" placeholder="Введите ваше сообщение здесь..."></textarea>
+        <button onclick="sendMessage({{ appeal.appeal_id }})">Отправить</button>
+    </div>
+
+    <div class="transfer-container">
+    </div>
+
+    <div class="promo-container">
+        <button id="add-promo-button" onclick="addPromocode({{ appeal.appeal_id }})">Добавить промокод</button>
+
+    </div>
+</div>
+<div class="footer">
+    &copy; 2024 EcoScooter
+</div>
+<script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>
