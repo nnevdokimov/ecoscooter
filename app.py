@@ -109,7 +109,6 @@ def index():
     return render_template('index.html', appeals_waiting=appeals_waiting, appeals_processing=appeals_processing)
 
 
-
 @app.route('/update_appeal_type/<int:appeal_id>', methods=['POST'])
 @login_required
 def update_appeal_type(appeal_id):
@@ -144,7 +143,6 @@ def appeal_details(appeal_id):
 
     # Отправка данных об обращении и связанных ответах в шаблон
     return render_template('appeal_details.html', appeal=appeal, responses=responses)
-
 
 
 @login_manager.user_loader
@@ -193,11 +191,11 @@ def admin_panel():
     user_support_data = db.session.query(
         UserSupport.username,
         db.func.count(SupportResponse.id).label('response_count')
-    ).join(SupportResponse, UserSupport.id == SupportResponse.operator_id, isouter=True).group_by(UserSupport.username).all()
+    ).join(SupportResponse, UserSupport.id == SupportResponse.operator_id, isouter=True).group_by(
+        UserSupport.username).all()
 
     return render_template('admin_panel.html', users=user_support_data)
 
 
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)
