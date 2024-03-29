@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Дашборд поддержки</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        .widget {
+            flex: 0 1 30%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin: 10px;
+            padding: 20px;
+        }
+        .full-width {
+            flex: 0 1 100%;
+        }
+        .half-width {
+            flex: 0 1 48%; /* для отступа */
+        }
+        .graph {
+            height: 250px; /* Высота может быть адаптирована */
+        }
+        /* Дополнительные стили */
+    </style>
+</head>
+<body>
+<div class="dashboard">
+        <!-- Виджет "Общее количество обращений" с Plotly графиком -->
+        <div class="widget full-width" id="total-appeals">
+            {{ total_appeals_div|safe }}
+        </div>
+        <!-- Здесь будет график "Распределение по типам обращений" -->
+        <div class="widget half-width">
+            {{ type_distribution_div|safe }}
+        </div>
+        <!-- Здесь будет график "Статус обращений" -->
+        <div class="widget half-width">
+            {{ status_distribution_div|safe }}
+        </div>
+        <!-- Здесь будет график "Активность по времени" -->
+        <div class="widget half-width">
+            {{ time_activity_div|safe }}
+        </div>
+        <!-- Здесь будет список "Топ пользователей по активности" -->
+        <div class="widget half-width">
+            {{ top_users_div|safe }}
+        </div>
+        <!-- Здесь будет график "Среднее время ответа" -->
+        <div class="widget full-width">
+            {{ average_response_time_div|safe }}
+        </div>
+        <!-- Здесь будет виджет "Количество обращений в реальном времени" -->
+        <div class="widget full-width">
+            {{ real_time_appeals_div|safe }}
+        </div>
+    </div>
+
+</body>
+</html>

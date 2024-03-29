@@ -6,7 +6,8 @@ from flask import Flask, request, jsonify, redirect, url_for, session, render_te
 from flask_sqlalchemy import SQLAlchemy
 from flask_session import Session
 from functools import wraps
-
+import plotly.graph_objs as go
+from plotly.offline import plot
 from send_response import send_response_to_user
 
 app = Flask(__name__)
@@ -109,7 +110,6 @@ def index():
     return render_template('index.html', appeals_waiting=appeals_waiting, appeals_processing=appeals_processing)
 
 
-
 @app.route('/update_appeal_type/<int:appeal_id>', methods=['POST'])
 @login_required
 def update_appeal_type(appeal_id):
@@ -144,7 +144,6 @@ def appeal_details(appeal_id):
 
     # Отправка данных об обращении и связанных ответах в шаблон
     return render_template('appeal_details.html', appeal=appeal, responses=responses)
-
 
 
 @login_manager.user_loader
@@ -193,10 +192,82 @@ def admin_panel():
     user_support_data = db.session.query(
         UserSupport.username,
         db.func.count(SupportResponse.id).label('response_count')
-    ).join(SupportResponse, UserSupport.id == SupportResponse.operator_id, isouter=True).group_by(UserSupport.username).all()
+    ).join(SupportResponse, UserSupport.id == SupportResponse.operator_id, isouter=True).group_by(
+        UserSupport.username).all()
 
     return render_template('admin_panel.html', users=user_support_data)
 
+
+@app.route('/status')
+def status():
+    total_appeals_div = get_total_appeals()
+    type_appeals_div = get_type_appeals_div()
+    status_distribution_div = get_status_distribution_div()
+
+    return render_template('status.html', total_appeals_div=total_appeals_div, type_appeals_div=type_appeals_div,
+                           status_distribution_div=status_distribution_div)
+
+
+def get_total_appeals():
+    total_appeals_count = Appeal.query.count()
+    total_appeals_indicator = go.Indicator(
+        mode='number+delta',
+        value=total_appeals_count,
+        title={'text': "Общее количество обращений"},
+        delta={'reference': 800, 'relative': True, 'position': "top"}
+        # Пример, показывающий изменение относительно предыдущего значения
+    )
+    total_appeals_layout = go.Layout(
+        title='Общее количество обращений'
+    )
+    total_appeals_fig = go.Figure(data=[total_appeals_indicator], layout=total_appeals_layout)
+    total_appeals_div = plot(total_appeals_fig, output_type='div', include_plotlyjs=False)
+    return total_appeals_div
+
+
+def get_type_appeals_div():
+    total_appeals_count = Appeal.query.count()
+    type_distribution = db.session.query(
+        Appeal.appeal_type, db.func.count(Appeal.appeal_type)
+    ).group_by(Appeal.appeal_type).all()
+    types = [result[0] for result in type_distribution]
+    counts = [result[1] for result in type_distribution]
+    type_distribution_fig = go.Figure(data=[
+        go.Bar(x=types, y=counts)
+    ])
+    type_distribution_fig.update_layout(
+        title="Распределение по типам обращений",
+        xaxis_title="Тип обращения",
+        yaxis_title="Количество обращений"
+    )
+    type_distribution_div = plot(type_distribution_fig, output_type='div', include_plotlyjs=False)
+    return type_distribution_div
+
+
+def get_status_distribution_div():
+    # Получение данных о распределении статусов обращений
+    status_distribution = db.session.query(
+        Appeal.status, db.func.count(Appeal.status)
+    ).group_by(Appeal.status).all()
+
+    # Подготовка данных для графика
+    statuses = [result[0] for result in status_distribution]
+    counts = [result[1] for result in status_distribution]
+
+    # Создание графика
+    fig = go.Figure(data=[
+        go.Pie(labels=statuses, values=counts)
+    ])
+    fig.update_traces(hole=.4, hoverinfo="label+percent+name")
+    fig.update_layout(
+        title_text="Распределение по статусам обращений",
+        annotations=[dict(text='Статусы', x=0.5, y=0.5, font_size=20, showarrow=False)]
+    )
+
+    # Преобразование графика в HTML-строку
+    status_distribution_div = plot(fig, output_type='div', include_plotlyjs=False)
+
+    return status_distribution_div
 
 
 if __name__ == '__main__':
