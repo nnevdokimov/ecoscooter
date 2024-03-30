@@ -204,7 +204,7 @@ def status():
     type_appeals_div = get_type_appeals_div()
     status_distribution_div = get_status_distribution_div()
 
-    return render_template('status.html', total_appeals_div=total_appeals_div, type_appeals_div=type_appeals_div,
+    return render_template('dashboard.html', total_appeals_div=total_appeals_div, type_distribution_div=type_appeals_div,
                            status_distribution_div=status_distribution_div)
 
 
@@ -217,28 +217,33 @@ def get_total_appeals():
         delta={'reference': 800, 'relative': True, 'position': "top"}
         # Пример, показывающий изменение относительно предыдущего значения
     )
-    total_appeals_layout = go.Layout(
-        title='Общее количество обращений'
-    )
-    total_appeals_fig = go.Figure(data=[total_appeals_indicator], layout=total_appeals_layout)
+    total_appeals_fig = go.Figure(data=[total_appeals_indicator])
     total_appeals_div = plot(total_appeals_fig, output_type='div', include_plotlyjs=False)
     return total_appeals_div
 
 
 def get_type_appeals_div():
-    total_appeals_count = Appeal.query.count()
-    type_distribution = db.session.query(
-        Appeal.appeal_type, db.func.count(Appeal.appeal_type)
-    ).group_by(Appeal.appeal_type).all()
-    types = [result[0] for result in type_distribution]
-    counts = [result[1] for result in type_distribution]
+    # total_appeals_count = Appeal.query.count()
+    # type_distribution = db.session.query(
+    #     Appeal.appeal_type, db.func.count(Appeal.appeal_type)
+    # ).group_by(Appeal.appeal_type).all()
+    # types = [result[0] for result in type_distribution]
+    # counts = [result[1] for result in type_distribution]
+
+    #рандом
+    import random
+    import collections
+    types = [random.choice(['Жалоба', 'Замечание']) for _ in range(100)]
+    counts = list((labls:=collections.Counter(types)).values())
+    #рандом
+
+
     type_distribution_fig = go.Figure(data=[
-        go.Bar(x=types, y=counts)
+        go.Pie(labels=list(labls.keys()), values=counts)
     ])
+    type_distribution_fig.update_traces(hole=.4, hoverinfo="label+percent+name")
     type_distribution_fig.update_layout(
         title="Распределение по типам обращений",
-        xaxis_title="Тип обращения",
-        yaxis_title="Количество обращений"
     )
     type_distribution_div = plot(type_distribution_fig, output_type='div', include_plotlyjs=False)
     return type_distribution_div
@@ -260,8 +265,8 @@ def get_status_distribution_div():
     ])
     fig.update_traces(hole=.4, hoverinfo="label+percent+name")
     fig.update_layout(
-        title_text="Распределение по статусам обращений",
-        annotations=[dict(text='Статусы', x=0.5, y=0.5, font_size=20, showarrow=False)]
+        title_text="Распределение по статусам обращений"
+
     )
 
     # Преобразование графика в HTML-строку
