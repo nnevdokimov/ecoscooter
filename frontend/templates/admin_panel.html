@@ -7,17 +7,17 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding-top: 50px; /* отступ для header */
+            padding-top: 60px; /* отступ для header */
             background-color: #ecf0f1;
         }
 
         .container {
             max-width: 1200px;
             margin: 30px auto;
-            padding: 15px;
+            padding: 20px;
             background: #fff; /* фон для контейнера, чтобы выделялся на общем фоне */
-            border-radius: 5px; /* скругление углов */
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* тень для контейнера */
+            border-radius: 10px; /* скругление углов */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* тень для контейнера */
         }
 
         h1 {
@@ -37,7 +37,7 @@
         }
 
         th, td {
-            padding: 10px;
+            padding: 15px;
             text-align: left;
         }
 
@@ -102,12 +102,45 @@
             .container {
                 padding: 15px;
             }
+
+            table, th, td {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            th, td {
+                display: block;
+                width: 100%;
+                text-align: right;
+            }
+
+            th {
+                background-color: #3498db;
+                color: white;
+                text-align: left;
+            }
+
+            tr {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 10px;
+            }
+
+            tr:nth-child(even) td {
+                background-color: #fdfdfd;
+            }
+
+            tr:hover {
+                background-color: #f1f1f1;
+            }
         }
     </style>
 </head>
 <body>
 <div class="header">
-    <a href="/" style="text-decoration: none; color: white;">Служба поддержки EcoScooter</a>
+    <a href="/frontend/static" style="text-decoration: none; color: white;">Служба поддержки EcoScooter</a>
     <a href="/logout" class="logout-link">Выйти</a>
 </div>
 <div class="container">

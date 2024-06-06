@@ -3,8 +3,8 @@ function sendMessage(appealId) {
     if (messageText.trim()) {
         fetch(`/send_message/${appealId}`, {
             method: 'POST',
-            body: JSON.stringify({ message: messageText }),
-            headers: { 'Content-Type': 'application/json' }
+            body: new URLSearchParams({ 'message': messageText }),
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         })
         .then(response => response.json())
         .then(data => {
@@ -12,7 +12,7 @@ function sendMessage(appealId) {
                 // Вывод всплывающего окна с подтверждением
                 alert('Сообщение успешно отправлено!');
                 // Перенаправление на страницу со списком обращений
-                window.location.href = '/';
+                window.location.href = `/appeal/${appealId}`;
             }
         })
         .catch(error => {
@@ -30,7 +30,7 @@ function addPromocode(appealId) {
 
     fetch(`/add_promocode/${appealId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
     .then(response => response.json())
     .then(data => {
@@ -59,4 +59,3 @@ function addPromocode(appealId) {
         promoButton.textContent = 'Добавить промокод';
     });
 }
-

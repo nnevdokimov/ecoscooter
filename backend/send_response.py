@@ -1,4 +1,7 @@
 import requests
+from sqlalchemy.orm import Session
+
+from backend.models import SessionLocal, Client, SupportTicket
 
 TOKEN_Neuron = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'
 API_URL = f'https://api.telegram.org/bot{TOKEN_Neuron}/'
@@ -24,15 +27,9 @@ def send_response_to_user(text, appeal_id, promocode=None):
     return response.json()
 
 
-def get_chat_id(response_id):
-    import sqlite3
+def get_chat_id(ticket_id):
+    db = SessionLocal()
+    ticket = db.query(SupportTicket).filter(SupportTicket.ticket_id == ticket_id).first()
 
-    conn = sqlite3.connect('instance/database.db')
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT user_id FROM appeals WHERE appeal_id = ?', (response_id,))
-    user_id = cursor.fetchone()
-
-    conn.commit()
-    conn.close()
-    return user_id[0]
+    client = db.query(Client).filter(Client.client_id == ticket.user_id).first()
+    return client.email

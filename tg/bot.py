@@ -1,9 +1,11 @@
 import logging
+from datetime import datetime
+
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-import aiosqlite
+import aiohttp
 
-API_TOKEN = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'  # Замените на реальный токен вашего бота
+API_TOKEN = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,21 +41,9 @@ async def send_welcome(message: types.Message):
 async def contact_handler(message: types.Message):
     user_id = message.from_user.id
     phone_number = message.contact.phone_number
-    # Сохранить данные в базу данных
-    await save_or_update_user_data(user_id, phone_number=phone_number)
+    # Сохранить данные в базу данных через FastAPI
+    await register_user(user_id, phone_number=phone_number)
     await message.reply("Выберите тип обращения:", reply_markup=type_keyboard)
-
-
-@dp.message_handler(content_types=['contact'])
-async def contact_handler(message: types.Message):
-    """
-    Обработчик события, когда пользователь делится своим контактом.
-    """
-    user_id = message.from_user.id
-    phone_number = message.contact.phone_number
-    # Здесь можно добавить логику для сохранения данных пользователя в базу данных
-    # Пока просто переходим к выбору типа обращения
-    await message.answer("Спасибо! Теперь выберите тип обращения.", reply_markup=type_keyboard)
 
 
 @dp.callback_query_handler(lambda c: c.data in ['recommendation', 'remark'])
@@ -67,9 +57,8 @@ async def type_callback_handler(callback_query: types.CallbackQuery):
 
 
 @dp.callback_query_handler(lambda c: c.data in ['start_new'])
-async def type_callback_handler(callback_query: types.CallbackQuery):
+async def start_new_callback_handler(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
-
     await bot.send_message(user_id, "Выберите тип обращения:", reply_markup=type_keyboard)
 
 
@@ -90,33 +79,44 @@ async def message_handler(message: types.Message):
 
 
 async def save_new_appeal(user_id, appeal_type, message):
-    async with aiosqlite.connect('instance/database.db') as db:
-        await db.execute('''INSERT INTO appeals (user_id, appeal_type, message, status) 
-                            VALUES (?, ?, ?, 'waiting')''',
-                         (user_id, appeal_type, message))
-        await db.commit()
-        cursor = await db.execute('SELECT last_insert_rowid()')
-        appeal_id = await cursor.fetchone()
-        return appeal_id[0]
+    async with aiohttp.ClientSession() as session:
+        async with session.post('http://localhost:8000/appeals/', data={
+            'email': user_id,
+            'category': appeal_type,
+            'description': message
+        }) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data['ticket_id']
+            else:
+                logging.error(f"Failed to save appeal: {response.status}")
+                return None
 
-    # Функция для сохранения или обновления данных пользователя
 
 
-async def save_or_update_user_data(user_id, phone_number=None, appeal_type=None):
-    async with aiosqlite.connect('instance/database.db') as db:
-        cursor = await db.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-        user = await cursor.fetchone()
-        if user:
-            # Если пользователь найден, обновляем его данные
-            await db.execute('''UPDATE users SET 
-                                phone_number = COALESCE(?, phone_number), 
-                                appeal_type = COALESCE(?, appeal_type)
-                                WHERE user_id = ?''', (phone_number, appeal_type, user_id))
-        else:
-            # Если пользователь не найден, добавляем новую запись
-            await db.execute('INSERT INTO users (user_id, phone_number, appeal_type) VALUES (?, ?, ?)',
-                             (user_id, phone_number, appeal_type))
-        await db.commit()
+async def register_user(user_id, full_name='Undefined',
+                                   dob=datetime.now().isoformat() + 'Z',
+                                   phone_number='Undefined', membership_type='Undefined'):
+    registration_date = datetime.now().isoformat() + 'Z'
+    async with aiohttp.ClientSession() as session:
+        async with session.post('http://localhost:8000/clients/', json={
+            'full_name': full_name,
+            'email': str(user_id),
+            'dob': dob,
+            'phone_number': phone_number,
+            'registration_date': registration_date,
+            'membership_type': membership_type,
+            'payment_details': 'Undefined',
+            'ride_history': 'Undefined',
+            'active_bookings': 'Undefined'
+        }) as response:
+            if response.status == 200:
+                logging.error(f"Successfully saved")
+                data = await response.json()
+                return data
+            else:
+                logging.error(f"Failed to save or update user data: {response.status}")
+                return None
 
 
 if __name__ == '__main__':
