@@ -23,6 +23,27 @@ class EmployeeCreate(BaseModel):
     last_name: str
     email: str
     username: str
+    password: Optional[str] = None
+    employee_type: str
+    access_level: int
+    department: str
+    position: str
+    hire_date: datetime
+    phone_number: Optional[str] = None
+    address: Optional[str] = None
+    status: str
+    last_login_date: Optional[datetime] = datetime.utcnow()
+
+    class Config:
+        from_attributes = True
+
+
+class EmployeeManage(BaseModel):
+    employee_id: int
+    first_name: str
+    last_name: str
+    email: str
+    username: str
     password: str
     employee_type: str
     access_level: int

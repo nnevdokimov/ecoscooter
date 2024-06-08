@@ -44,41 +44,6 @@
             margin-bottom: 5px;
         }
 
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            background-color: #2c3e50;
-            color: white;
-            position: relative;
-            bottom: 0;
-            width: 100%;
-        }
-
-        .header {
-            background-color: #333;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .header a, .logout-link {
-            color: white;
-            text-decoration: none;
-            padding: 10px;
-        }
-
-        .header a:hover, .logout-link:hover {
-            text-decoration: underline;
-        }
-
         .logout-link {
             color: white;
             text-decoration: none;
@@ -133,6 +98,41 @@
                 width: 100%;
             }
         }
+
+        .header {
+            background-color: #333;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header a, .logout-link {
+            color: white;
+            text-decoration: none;
+            padding: 10px;
+        }
+
+        .header a:hover, .logout-link:hover {
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #2c3e50;
+            color: white;
+            position: relative;
+            bottom: 0;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -140,6 +140,13 @@
 <div class="header">
     <a href="/">Служба поддержки EcoScooter</a>
     <div>
+        <a href="/">Обращения</a>
+        {% if current_user.access_level >= 2 %}
+        <a href="/statistics">Статистика</a>
+        {% endif %}
+        {% if current_user.access_level >= 3 %}
+        <a href="/manage_employees">Администрирование</a>
+        {% endif %}
         <a href="#" id="account-link">Личный кабинет</a>
         <a href="/logout" class="logout-link">Выйти</a>
     </div>

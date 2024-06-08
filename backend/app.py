@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-
+from typing import List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -12,7 +12,7 @@ from backend.models import (
     SupportResponse
 )
 from backend.schemas import (
-    ItemCreate, EmployeeCreate, ClientCreate, SupportTicketCreate, ParkingCreate, BreakdownCreate,
+    ItemCreate, EmployeeCreate, EmployeeManage, ClientCreate, SupportTicketCreate, ParkingCreate, BreakdownCreate,
     CourierScheduleCreate,
     AppealResponse, AppealsResponse, SupportResponseCreate, SupportResponseResponse
 )
@@ -39,6 +39,17 @@ def get_db():
         db.close()
 
 
+def check_access_level(required_level: int):
+    def access_level_dependency(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+        user_id = int(token)
+        user = db.query(Employee).filter(Employee.employee_id == user_id).first()
+        if user is None or user.access_level < required_level:
+            raise HTTPException(status_code=403, detail="Insufficient access level")
+        return user
+
+    return access_level_dependency
+
+
 # Endpoints
 @app.post("/token")
 async def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
@@ -48,8 +59,18 @@ async def login(username: str = Form(...), password: str = Form(...), db: Sessio
     return {"access_token": str(user.employee_id), "token_type": "bearer"}
 
 
+@app.get("/user")
+async def get_user_data(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user_id = int(token)
+    user = db.query(Employee).filter(Employee.employee_id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": user.employee_id, "username": user.username, "access_level": user.access_level}
+
+
 @app.get("/appeals", response_model=AppealsResponse)
-async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
+                       user: Employee = Depends(check_access_level(1))):
     appeals_waiting = db.query(SupportTicket).filter(SupportTicket.status == 'waiting').offset(skip).limit(limit).all()
     appeals_processing = db.query(SupportTicket).filter(SupportTicket.status == 'in processing').offset(skip).limit(
         limit).all()
@@ -62,7 +83,7 @@ async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get
 
 @app.post("/appeals/", response_model=AppealResponse)
 async def create_appeal(email: str = Form(...), category: str = Form(...), description: str = Form(...),
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2))):
     client = db.query(Client).filter(Client.email == email).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -81,7 +102,7 @@ async def create_appeal(email: str = Form(...), category: str = Form(...), descr
 
 
 @app.get("/appeals/{appeal_id}", response_model=AppealResponse)
-async def read_appeal(appeal_id: int, db: Session = Depends(get_db)):
+async def read_appeal(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1))):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal is None:
         raise HTTPException(status_code=404, detail="Appeal not found")
@@ -89,7 +110,8 @@ async def read_appeal(appeal_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/appeals/{appeal_id}/update_type")
-async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Session = Depends(get_db)):
+async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Session = Depends(get_db),
+                             user: Employee = Depends(check_access_level(2))):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal:
         appeal.category = category
@@ -100,7 +122,7 @@ async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Sess
 
 @app.post("/send_message/{appeal_id}")
 async def send_message(appeal_id: int, operator_id: int = Form(...), message: str = Form(...),
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2))):
     # Try to find an existing response
     response = db.query(SupportResponse).filter(SupportResponse.ticket_id == appeal_id).first()
 
@@ -128,7 +150,7 @@ async def send_message(appeal_id: int, operator_id: int = Form(...), message: st
 
 
 @app.post("/add_promocode/{appeal_id}")
-async def add_promocode(appeal_id: int, db: Session = Depends(get_db)):
+async def add_promocode(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2))):
     promo_code = str(uuid.uuid4())
     response = db.query(SupportResponse).filter(SupportResponse.ticket_id == appeal_id).first()
     if response:
@@ -139,7 +161,7 @@ async def add_promocode(appeal_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/items/", response_model=ItemCreate)
-async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
+async def create_item(item: ItemCreate, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(3))):
     db_item = Item(**item.dict())
     db.add(db_item)
     db.commit()
@@ -148,7 +170,8 @@ async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/employees/", response_model=EmployeeCreate)
-async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db)):
+async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db),
+                          user: Employee = Depends(check_access_level(3))):
     db_employee = Employee(
         first_name=employee.first_name,
         last_name=employee.last_name,
@@ -172,7 +195,8 @@ async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db
 
 
 @app.post("/clients/", response_model=ClientCreate)
-async def create_client(client: ClientCreate, db: Session = Depends(get_db)):
+async def create_client(client: ClientCreate, db: Session = Depends(get_db),
+                        user: Employee = Depends(check_access_level(3))):
     db_client = Client(**client.dict())
     db.add(db_client)
     db.commit()
@@ -181,7 +205,8 @@ async def create_client(client: ClientCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/support_tickets/", response_model=SupportTicketCreate)
-async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depends(get_db)):
+async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depends(get_db),
+                                user: Employee = Depends(check_access_level(3))):
     db_ticket = SupportTicket(**ticket.dict())
     db.add(db_ticket)
     db.commit()
@@ -190,7 +215,8 @@ async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depen
 
 
 @app.post("/parkings/", response_model=ParkingCreate)
-async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db)):
+async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db),
+                         user: Employee = Depends(check_access_level(3))):
     db_parking = Parking(**parking.dict())
     db.add(db_parking)
     db.commit()
@@ -199,7 +225,8 @@ async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/breakdowns/", response_model=BreakdownCreate)
-async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get_db)):
+async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get_db),
+                           user: Employee = Depends(check_access_level(3))):
     db_breakdown = Breakdown(**breakdown.dict())
     db.add(db_breakdown)
     db.commit()
@@ -208,12 +235,86 @@ async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get
 
 
 @app.post("/courier_schedules/", response_model=CourierScheduleCreate)
-async def create_courier_schedule(schedule: CourierScheduleCreate, db: Session = Depends(get_db)):
+async def create_courier_schedule(schedule: CourierScheduleCreate, db: Session = Depends(get_db),
+                                  user: Employee = Depends(check_access_level(3))):
     db_schedule = CourierSchedule(**schedule.dict())
     db.add(db_schedule)
     db.commit()
     db.refresh(db_schedule)
     return db_schedule
+
+
+@app.get("/employees/", response_model=List[EmployeeManage])
+async def read_employees(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
+                         user: Employee = Depends(check_access_level(3))):
+    employees = db.query(Employee).offset(skip).limit(limit).all()
+
+    return employees
+
+
+@app.get("/employees/{employee_id}", response_model=EmployeeCreate)
+async def read_employee(employee_id: int, db: Session = Depends(get_db),
+                        user: Employee = Depends(check_access_level(3))):
+    employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return employee
+
+
+@app.put("/employees/{employee_id}", response_model=EmployeeCreate)
+async def update_employee(employee_id: int, employee: EmployeeCreate, db: Session = Depends(get_db),
+                          user: Employee = Depends(check_access_level(3))):
+    db_employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if db_employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    for key, value in employee.dict(exclude_unset=True).items():
+        if key == "password" and value is None:
+            continue
+        setattr(db_employee, key, value)
+
+    db.commit()
+    db.refresh(db_employee)
+    return db_employee
+
+
+@app.delete("/employees/{employee_id}")
+async def delete_employee(employee_id: int, db: Session = Depends(get_db),
+                          user: Employee = Depends(check_access_level(3))):
+    db_employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
+    if db_employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    db.delete(db_employee)
+    db.commit()
+    return JSONResponse(status_code=200, content={"message": "Employee deleted"})
+
+
+@app.get("/statistics", response_model=Dict[str, Any])
+async def get_statistics(db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2))):
+    # Пример сбора статистики, этот код нужно адаптировать под ваши нужды
+    total_employees = db.query(Employee).count()
+    total_clients = db.query(Client).count()
+    total_support_tickets = db.query(SupportTicket).count()
+    appeals_waiting = db.query(SupportTicket).filter(SupportTicket.status == 'waiting').count()
+    appeals_processing = db.query(SupportTicket).filter(SupportTicket.status == 'in processing').count()
+
+    statistics = {
+        "total_employees": total_employees,
+        "total_clients": total_clients,
+        "total_support_tickets": total_support_tickets,
+        "appeals_waiting": appeals_waiting,
+        "appeals_processing": appeals_processing,
+        # Добавьте другие необходимые метрики
+    }
+
+    return statistics
+
+
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
 
 if __name__ == "__main__":

@@ -110,9 +110,17 @@
     </style>
 </head>
 <body>
+<!-- Header -->
 <div class="header">
     <a href="/">Служба поддержки EcoScooter</a>
     <div>
+        <a href="/">Обращения</a>
+        {% if current_user.access_level >= 2 %}
+        <a href="/statistics">Статистика</a>
+        {% endif %}
+        {% if current_user.access_level >= 3 %}
+        <a href="/manage_employees">Администрирование</a>
+        {% endif %}
         <a href="#" id="account-link">Личный кабинет</a>
         <a href="/logout" class="logout-link">Выйти</a>
     </div>
@@ -125,8 +133,10 @@
     <form action="{{ url_for('update_appeal_type', appeal_id=appeal.ticket_id) }}" method="post">
         <label for="category">Изменить категорию обращения:</label>
         <select name="category" id="category">
-            <option value="Замечание" {% if appeal.category == "Замечание" %}selected{% endif %}>Замечание</option>
-            <option value="Рекомендация" {% if appeal.category == "Рекомендация" %}selected{% endif %}>Рекомендация</option>
+            <option value="Замечание" {% if appeal.category==
+            "Замечание" %}selected{% endif %}>Замечание</option>
+            <option value="Рекомендация" {% if appeal.category==
+            "Рекомендация" %}selected{% endif %}>Рекомендация</option>
         </select>
         <button type="submit">Обновить</button>
     </form>
