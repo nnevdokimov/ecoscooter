@@ -59,7 +59,7 @@ def load_user(user_id):
     return UserSupport.get(user_id)
 
 
-def access_required(level):
+def access_required(level, upper, higher):
     def decorator(f):
         @wraps(f)
         @login_required
@@ -275,33 +275,41 @@ def statistics():
         return redirect(url_for('index'))
 
 
-@app.route('/manage_scooters', methods=['GET', 'POST'])
+@app.route('/manage_scooters', methods=['GET'])
 @access_required(2)
 def manage_scooters():
     headers = {"Authorization": f"Bearer {session['token']}"}
-    response = requests.get("http://localhost:8000/scooters_with_breakdowns", headers=headers)
+    query = request.args.get('query')
+    if query:
+        response = requests.get(f"http://localhost:8000/breakdowns?query={query}", headers=headers)
+    else:
+        response = requests.get("http://localhost:8000/breakdowns", headers=headers)
     if response.status_code == 200:
         breakdowns = response.json()
         return render_template('manage_scooters.html', breakdowns=breakdowns)
     else:
-        flash('Не удалось получить список самокатов с поломками. Попробуйте снова.', 'error')
+        flash('Не удалось получить данные о самокатах. Попробуйте снова.', 'error')
         return redirect(url_for('index'))
 
 
-@app.route('/update_breakdown_status/<int:breakdown_id>', methods=['POST'])
+
+
+@app.route('/update_breakdown/<int:breakdown_id>', methods=['POST'])
 @access_required(2)
-def update_breakdown_status(breakdown_id):
+def update_breakdown(breakdown_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     data = {
         "status": request.form['status'],
-        "comments": request.form.get('comments', '')
+        "maintenance_notes": request.form['maintenance_notes'],
+        "priority_level": request.form['priority_level']
     }
-    response = requests.put(f"http://localhost:8000/update_breakdown_status/{breakdown_id}", data=data, headers=headers)
+    response = requests.put(f"http://localhost:8000/breakdowns/{breakdown_id}", json=data, headers=headers)
     if response.status_code == 200:
-        flash('Статус поломки обновлен успешно.', 'success')
+        flash('Данные о поломке успешно обновлены.', 'success')
     else:
-        flash('Ошибка при обновлении статуса поломки. Попробуйте снова.', 'error')
+        flash('Ошибка при обновлении данных о поломке. Попробуйте снова.', 'error')
     return redirect(url_for('manage_scooters'))
+
 
 
 if __name__ == '__main__':

@@ -3,32 +3,88 @@
 {% block title %}Управление самокатами{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1>Самокаты с поломками</h1>
+<div class="search-container">
+    <form method="get" action="{{ url_for('manage_scooters') }}">
+        <input type="text" name="query" placeholder="Поиск по ID самоката...">
+        <button type="submit">Искать</button>
+    </form>
+</div>
+
+<h1>Самокаты с поломками</h1>
+<div class="scooter-container">
     {% for breakdown in breakdowns %}
-    <div class="scooter-item">
-        <h2>Самокат ID: {{ breakdown.item_id }}</h2>
-        <p><strong>Тип поломки:</strong> {{ breakdown.breakdown_type }}</p>
-        <p><strong>Описание:</strong> {{ breakdown.description }}</p>
-        <p><strong>Приоритет:</strong> {{ breakdown.priority_level }}</p>
-        <p><strong>Статус:</strong> {{ breakdown.status }}</p>
-
-        <form action="{{ url_for('update_breakdown_status', breakdown_id=breakdown.breakdown_id) }}" method="post">
-            <label for="status">Изменить статус:</label>
-            <select name="status" id="status">
-                <option value="pending" {% if breakdown.status == 'pending' %}selected{% endif %}>В ожидании</option>
-                <option value="in_progress" {% if breakdown.status == 'in_progress' %}selected{% endif %}>В процессе</option>
-                <option value="resolved" {% if breakdown.status == 'resolved' %}selected{% endif %}>Решено</option>
-            </select>
-
-            <label for="comments">Комментарии:</label>
-            <textarea name="comments" id="comments" rows="4">{{ breakdown.maintenance_notes }}</textarea>
-
-            <button type="submit">Обновить</button>
-        </form>
+    <div class="scooter" onclick="openEditModal({{ breakdown.breakdown_id }}, {{ breakdown.item_id }}, '{{ breakdown.breakdown_type }}', '{{ breakdown.description }}', '{{ breakdown.priority_level }}', '{{ breakdown.status }}', '{{ breakdown.maintenance_notes }}')">
+        <strong>Самокат ID:</strong> {{ breakdown.item_id }}<br>
+        <strong>Тип поломки:</strong> {{ breakdown.breakdown_type }}<br>
+        <strong>Описание:</strong> {{ breakdown.description }}<br>
+        <strong>Приоритет:</strong> {{ breakdown.priority_level }}<br>
+        <strong>Статус:</strong> {{ breakdown.status }}
     </div>
-    {% else %}
-    <p>Нет самокатов с поломками.</p>
     {% endfor %}
 </div>
+
+<!-- Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditModal()">&times;</span>
+        <h2>Редактировать поломку</h2>
+        <form method="post" action="" id="updateForm">
+            <input type="hidden" id="breakdown_id" name="breakdown_id">
+            <label for="item_id">Самокат ID:</label>
+            <input type="text" id="item_id" name="item_id" readonly>
+
+            <label for="breakdown_type">Тип поломки:</label>
+            <input type="text" id="breakdown_type" name="breakdown_type" readonly>
+
+            <label for="description">Описание:</label>
+            <textarea id="description" name="description" readonly></textarea>
+
+            <label for="priority_level">Приоритет:</label>
+            <select id="priority_level" name="priority_level">
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+            </select>
+
+            <label for="status">Статус:</label>
+            <select id="status" name="status">
+                <option value="pending">pending</option>
+                <option value="in_progress">in_progress</option>
+                <option value="resolved">resolved</option>
+            </select>
+
+            <label for="maintenance_notes">Комментарии:</label>
+            <textarea id="maintenance_notes" name="maintenance_notes"></textarea>
+
+            <div class="modal-buttons">
+                <button type="submit">Обновить</button>
+                <button type="button" class="cancel" onclick="closeEditModal()">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditModal(breakdown_id, item_id, breakdown_type, description, priority_level, status, maintenance_notes) {
+        document.getElementById('breakdown_id').value = breakdown_id;
+        document.getElementById('item_id').value = item_id;
+        document.getElementById('breakdown_type').value = breakdown_type;
+        document.getElementById('description').value = description;
+        document.getElementById('priority_level').value = priority_level;
+        document.getElementById('status').value = status;
+        document.getElementById('maintenance_notes').value = maintenance_notes;
+        document.getElementById('updateForm').action = `/update_breakdown/${breakdown_id}`;
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        if (event.target == document.getElementById('editModal')) {
+            closeEditModal();
+        }
+    }
+</script>
 {% endblock %}
