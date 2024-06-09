@@ -59,12 +59,13 @@ def load_user(user_id):
     return UserSupport.get(user_id)
 
 
-def access_required(level, upper, higher):
+def access_required(lower, higher):
     def decorator(f):
         @wraps(f)
         @login_required
         def decorated_function(*args, **kwargs):
-            if current_user.access_level < level:
+            if current_user.access_level != 0 and (
+                    current_user.access_level < lower or current_user.access_level > higher):
                 return redirect(url_for('index'))
             return f(*args, **kwargs)
 
@@ -79,6 +80,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         response = requests.post("http://localhost:8000/token", data={"username": username, "password": password})
+        print(response.json())
         if response.status_code == 200:
             user_data = response.json()
             user_id = user_data.get('user_id')
@@ -111,11 +113,11 @@ def index():
                                appeals_processing=appeals["appeals_processing"])
     else:
         flash('Не удалось получить данные. Попробуйте снова.', 'error')
-        return redirect(url_for('logout'))
+        return redirect(url_for('index'))
 
 
 @app.route('/appeals/')
-@login_required
+@access_required(1, 2)
 def appeals():
     headers = {"Authorization": f"Bearer {session['token']}"}
     response = requests.get("http://localhost:8000/appeals", headers=headers)
@@ -125,11 +127,11 @@ def appeals():
                                appeals_processing=appeals["appeals_processing"])
     else:
         flash('Не удалось получить данные. Попробуйте снова.', 'error')
-        return redirect(url_for('logout'))
+        return redirect(url_for('index'))
 
 
 @app.route('/appeal/<int:appeal_id>')
-@login_required
+@access_required(1, 2)
 def appeal_details(appeal_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     response = requests.get(f"http://localhost:8000/appeals/{appeal_id}", headers=headers)
@@ -142,7 +144,7 @@ def appeal_details(appeal_id):
 
 
 @app.route('/update_appeal_type/<int:appeal_id>', methods=['POST'])
-@login_required
+@access_required(1, 2)
 def update_appeal_type(appeal_id):
     new_type = request.form.get('category')
     headers = {"Authorization": f"Bearer {session['token']}"}
@@ -156,7 +158,7 @@ def update_appeal_type(appeal_id):
 
 
 @app.route('/send_message/<int:appeal_id>', methods=['POST'])
-@login_required
+@access_required(1, 2)
 def send_message(appeal_id):
     message = request.form.get('message')
     headers = {"Authorization": f"Bearer {session['token']}"}
@@ -170,7 +172,7 @@ def send_message(appeal_id):
 
 
 @app.route('/add_promocode/<int:appeal_id>', methods=['POST'])
-@login_required
+@access_required(1, 2)
 def add_promocode(appeal_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     response = requests.post(f"http://localhost:8000/add_promocode/{appeal_id}", headers=headers)
@@ -182,7 +184,7 @@ def add_promocode(appeal_id):
 
 
 @app.route('/edit_employee/<int:employee_id>', methods=['POST'])
-@access_required(3)
+@access_required(0, 0)
 def edit_employee(employee_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     hire_date = request.form['hire_date'] + "T00:00:00"  # Append time to the date
@@ -215,7 +217,7 @@ def edit_employee(employee_id):
 
 
 @app.route('/delete_employee/<int:employee_id>', methods=['GET'])
-@access_required(3)
+@access_required(0, 0)
 def delete_employee(employee_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     response = requests.delete(f"http://localhost:8000/employees/{employee_id}", headers=headers)
@@ -227,7 +229,7 @@ def delete_employee(employee_id):
 
 
 @app.route('/manage_employees', methods=['GET', 'POST'])
-@access_required(3)
+@access_required(0, 0)
 def manage_employees():
     if request.method == 'POST':
         data = {
@@ -262,7 +264,7 @@ def manage_employees():
 
 
 @app.route('/statistics')
-@access_required(2)
+@access_required(2, 2)
 def statistics():
     headers = {"Authorization": f"Bearer {session['token']}"}
     response = requests.get("http://localhost:8000/statistics", headers=headers)
@@ -276,7 +278,7 @@ def statistics():
 
 
 @app.route('/manage_scooters', methods=['GET'])
-@access_required(2)
+@access_required(3, 3)
 def manage_scooters():
     headers = {"Authorization": f"Bearer {session['token']}"}
     query = request.args.get('query')
@@ -292,10 +294,8 @@ def manage_scooters():
         return redirect(url_for('index'))
 
 
-
-
 @app.route('/update_breakdown/<int:breakdown_id>', methods=['POST'])
-@access_required(2)
+@access_required(3, 3)
 def update_breakdown(breakdown_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     data = {
@@ -309,7 +309,6 @@ def update_breakdown(breakdown_id):
     else:
         flash('Ошибка при обновлении данных о поломке. Попробуйте снова.', 'error')
     return redirect(url_for('manage_scooters'))
-
 
 
 if __name__ == '__main__':
