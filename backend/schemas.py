@@ -157,20 +157,34 @@ class BreakdownCreate(BaseModel):
     description: str
     status: str
     reported_by: str
-    assigned_to: Optional[str]
+    assigned_to: Optional[str] = None
     priority_level: str
-    resolution_date: Optional[datetime]
-    resolution_details: Optional[str]
-    downtime_duration: Optional[int]
-    parts_replaced: Optional[str]
-    maintenance_notes: Optional[str]
-    follow_up_actions: Optional[str]
+    resolution_date: Optional[datetime] = None
+    resolution_details: Optional[str] = None
+    downtime_duration: Optional[int] = None
+    parts_replaced: Optional[str] = None
+    maintenance_notes: Optional[str] = None
+    follow_up_actions: Optional[str] = None
 
     class Config:
         orm_mode = True
 
-
 class BreakdownUpdate(BaseModel):
+    breakdown_type: str
+    description: str
+    priority_level: str
+    status: str
+    maintenance_notes: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+class BreakdownResponse(BaseModel):
+    breakdown_id: int
+    item_id: int
+    breakdown_type: str
+    description: str
+    priority_level: str
     status: str
     maintenance_notes: Optional[str]
 

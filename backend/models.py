@@ -1,6 +1,8 @@
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, Date, DateTime, ForeignKey, Time, TIMESTAMP, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, Date, DateTime, ForeignKey, Time, TIMESTAMP, \
+    Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from passlib.context import CryptContext

@@ -14,7 +14,7 @@ from backend.models import (
 from backend.schemas import (
     ItemCreate, EmployeeCreate, EmployeeManage, ClientCreate, SupportTicketCreate, ParkingCreate, BreakdownCreate,
     CourierScheduleCreate,
-    AppealResponse, AppealsResponse, SupportResponseCreate, SupportResponseResponse
+    AppealResponse, AppealsResponse, SupportResponseCreate, SupportResponseResponse, BreakdownResponse, BreakdownUpdate
 )
 
 # Create the database tables
@@ -234,29 +234,27 @@ async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get
     return db_breakdown
 
 
-@app.get("/scooters_with_breakdowns/")
-async def get_scooters_with_breakdowns(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').offset(skip).limit(limit).all()
+# Получение списка поломок
+@app.get("/breakdowns")
+def read_breakdowns(query: str = None, db: Session = Depends(get_db)):
+    if query:
+        breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').filter(Breakdown.item_id == int(query)).all()
+    else:
+        breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').all()
     return breakdowns
 
 
-@app.put("/update_breakdown_status/{breakdown_id}")
-async def update_breakdown_status(breakdown_id: int, status: str = Form(...), comments: str = Form(None),
-                                  db: Session = Depends(get_db)):
-    breakdown = db.query(Breakdown).filter(Breakdown.breakdown_id == breakdown_id).first()
-    if not breakdown:
+# Обновление поломки
+@app.put("/update_breakdown/{breakdown_id}", response_model=BreakdownResponse)
+def update_breakdown(breakdown_id: int, breakdown: BreakdownUpdate, db: Session = Depends(get_db)):
+    db_breakdown = db.query(Breakdown).filter(Breakdown.breakdown_id == breakdown_id).first()
+    if db_breakdown is None:
         raise HTTPException(status_code=404, detail="Breakdown not found")
-
-    breakdown.status = status
-    if comments:
-        breakdown.maintenance_notes = comments
-
-    if status == 'resolved':
-        breakdown.resolution_date = datetime.now()
-
+    for key, value in breakdown.dict().items():
+        setattr(db_breakdown, key, value)
     db.commit()
-    db.refresh(breakdown)
-    return breakdown
+    db.refresh(db_breakdown)
+    return db_breakdown
 
 
 @app.post("/courier_schedules/", response_model=CourierScheduleCreate)
