@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Обращения в поддержку{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Ожидают ответа</h1>
+    <div class="appeal-container">
+        {% for appeal in appeals_waiting %}
+        <!-- Блоки обращений -->
+        <a href="{{ url_for('appeal_details', appeal_id=appeal['ticket_id']) }}" class="appeal">
+            <strong>ID:</strong> {{ appeal['ticket_id'] }}<br>
+            <strong>User ID:</strong> {{ appeal['user_id'] }}<br>
+            <strong>Category:</strong> {{ appeal['category'] }}<br>
+            <strong>Description:</strong> {{ appeal['description'] }}<br>
+            <strong>Status:</strong> {{ appeal['status'] }}
+        </a>
+        {% else %}
+        <p>Нет запросов в ожидании.</p>
+        {% endfor %}
+    </div>
+
+    <h1>В обработке</h1>
+    <div class="appeal-container">
+        {% for appeal in appeals_processing %}
+        <!-- Блоки обращений -->
+        <a href="{{ url_for('appeal_details', appeal_id=appeal['ticket_id']) }}" class="appeal">
+            <strong>ID:</strong> {{ appeal['ticket_id'] }}<br>
+            <strong>User ID:</strong> {{ appeal['user_id'] }}<br>
+            <strong>Category:</strong> {{ appeal['category'] }}<br>
+            <strong>Description:</strong> {{ appeal['description'] }}<br>
+            <strong>Status:</strong> {{ appeal['status'] }}
+        </a>
+        {% else %}
+        <p>Нет запросов в обработке.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Личный кабинет Модал -->
+<div id="account-modal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Личный кабинет</h2>
+        <p>Имя пользователя: {{ current_user.username }}</p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('account-link').onclick = function () {
+        document.getElementById('account-modal').style.display = "block";
+    };
+
+    document.getElementsByClassName('close')[0].onclick = function () {
+        document.getElementById('account-modal').style.display = "none";
+    };
+
+    window.onclick = function (event) {
+        if (event.target === document.getElementById('account-modal')) {
+            document.getElementById('account-modal').style.display = "none";
+        }
+    };
+</script>
+{% endblock %}

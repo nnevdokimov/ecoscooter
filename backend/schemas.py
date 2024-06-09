@@ -151,23 +151,31 @@ class ParkingCreate(BaseModel):
 
 
 class BreakdownCreate(BaseModel):
-    equipment_id: int
+    item_id: int
     reported_date: datetime
     breakdown_type: str
     description: str
     status: str
     reported_by: str
-    assigned_to: Optional[str] = None
+    assigned_to: Optional[str]
     priority_level: str
-    resolution_date: Optional[datetime] = None
-    resolution_details: Optional[str] = None
-    downtime_duration: Optional[int] = None
-    parts_replaced: Optional[str] = None
-    maintenance_notes: Optional[str] = None
-    follow_up_actions: Optional[str] = None
+    resolution_date: Optional[datetime]
+    resolution_details: Optional[str]
+    downtime_duration: Optional[int]
+    parts_replaced: Optional[str]
+    maintenance_notes: Optional[str]
+    follow_up_actions: Optional[str]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
+
+
+class BreakdownUpdate(BaseModel):
+    status: str
+    maintenance_notes: Optional[str]
+
+    class Config:
+        orm_mode = True
 
 
 class CourierScheduleCreate(BaseModel):

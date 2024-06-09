@@ -114,6 +114,20 @@ def index():
         return redirect(url_for('logout'))
 
 
+@app.route('/appeals/')
+@login_required
+def appeals():
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    response = requests.get("http://localhost:8000/appeals", headers=headers)
+    if response.status_code == 200:
+        appeals = response.json()
+        return render_template('appeals.html', appeals_waiting=appeals["appeals_waiting"],
+                               appeals_processing=appeals["appeals_processing"])
+    else:
+        flash('Не удалось получить данные. Попробуйте снова.', 'error')
+        return redirect(url_for('logout'))
+
+
 @app.route('/appeal/<int:appeal_id>')
 @login_required
 def appeal_details(appeal_id):
@@ -187,7 +201,8 @@ def edit_employee(employee_id):
         "phone_number": request.form['phone_number'],
         "address": request.form['address'],
         "status": request.form['status'],
-        "last_login_date": request.form.get('last_login_date', datetime.utcnow().isoformat())  # Optional field with default value
+        "last_login_date": request.form.get('last_login_date', datetime.utcnow().isoformat())
+        # Optional field with default value
     }
     response = requests.put(f"http://localhost:8000/employees/{employee_id}", json=data, headers=headers)
     if response.status_code == 200:
@@ -197,8 +212,6 @@ def edit_employee(employee_id):
         print(f"Error updating employee: {error_details}")
         flash(f"Error updating employee: {error_details}", 'error')
     return redirect(url_for('manage_employees'))
-
-
 
 
 @app.route('/delete_employee/<int:employee_id>', methods=['GET'])
@@ -260,6 +273,35 @@ def statistics():
     else:
         flash('Не удалось получить статистику. Попробуйте снова.', 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/manage_scooters', methods=['GET', 'POST'])
+@access_required(2)
+def manage_scooters():
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    response = requests.get("http://localhost:8000/scooters_with_breakdowns", headers=headers)
+    if response.status_code == 200:
+        breakdowns = response.json()
+        return render_template('manage_scooters.html', breakdowns=breakdowns)
+    else:
+        flash('Не удалось получить список самокатов с поломками. Попробуйте снова.', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/update_breakdown_status/<int:breakdown_id>', methods=['POST'])
+@access_required(2)
+def update_breakdown_status(breakdown_id):
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    data = {
+        "status": request.form['status'],
+        "comments": request.form.get('comments', '')
+    }
+    response = requests.put(f"http://localhost:8000/update_breakdown_status/{breakdown_id}", data=data, headers=headers)
+    if response.status_code == 200:
+        flash('Статус поломки обновлен успешно.', 'success')
+    else:
+        flash('Ошибка при обновлении статуса поломки. Попробуйте снова.', 'error')
+    return redirect(url_for('manage_scooters'))
 
 
 if __name__ == '__main__':

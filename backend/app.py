@@ -234,6 +234,31 @@ async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get
     return db_breakdown
 
 
+@app.get("/scooters_with_breakdowns/")
+async def get_scooters_with_breakdowns(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').offset(skip).limit(limit).all()
+    return breakdowns
+
+
+@app.put("/update_breakdown_status/{breakdown_id}")
+async def update_breakdown_status(breakdown_id: int, status: str = Form(...), comments: str = Form(None),
+                                  db: Session = Depends(get_db)):
+    breakdown = db.query(Breakdown).filter(Breakdown.breakdown_id == breakdown_id).first()
+    if not breakdown:
+        raise HTTPException(status_code=404, detail="Breakdown not found")
+
+    breakdown.status = status
+    if comments:
+        breakdown.maintenance_notes = comments
+
+    if status == 'resolved':
+        breakdown.resolution_date = datetime.now()
+
+    db.commit()
+    db.refresh(breakdown)
+    return breakdown
+
+
 @app.post("/courier_schedules/", response_model=CourierScheduleCreate)
 async def create_courier_schedule(schedule: CourierScheduleCreate, db: Session = Depends(get_db),
                                   user: Employee = Depends(check_access_level(3))):
@@ -309,7 +334,6 @@ async def get_statistics(db: Session = Depends(get_db), user: Employee = Depends
     }
 
     return statistics
-
 
 
 @app.get("/")

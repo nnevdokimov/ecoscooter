@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Управление самокатами{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Самокаты с поломками</h1>
+    {% for breakdown in breakdowns %}
+    <div class="scooter-item">
+        <h2>Самокат ID: {{ breakdown.item_id }}</h2>
+        <p><strong>Тип поломки:</strong> {{ breakdown.breakdown_type }}</p>
+        <p><strong>Описание:</strong> {{ breakdown.description }}</p>
+        <p><strong>Приоритет:</strong> {{ breakdown.priority_level }}</p>
+        <p><strong>Статус:</strong> {{ breakdown.status }}</p>
+
+        <form action="{{ url_for('update_breakdown_status', breakdown_id=breakdown.breakdown_id) }}" method="post">
+            <label for="status">Изменить статус:</label>
+            <select name="status" id="status">
+                <option value="pending" {% if breakdown.status == 'pending' %}selected{% endif %}>В ожидании</option>
+                <option value="in_progress" {% if breakdown.status == 'in_progress' %}selected{% endif %}>В процессе</option>
+                <option value="resolved" {% if breakdown.status == 'resolved' %}selected{% endif %}>Решено</option>
+            </select>
+
+            <label for="comments">Комментарии:</label>
+            <textarea name="comments" id="comments" rows="4">{{ breakdown.maintenance_notes }}</textarea>
+
+            <button type="submit">Обновить</button>
+        </form>
+    </div>
+    {% else %}
+    <p>Нет самокатов с поломками.</p>
+    {% endfor %}
+</div>
+{% endblock %}

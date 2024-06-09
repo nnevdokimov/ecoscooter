@@ -108,7 +108,7 @@ class Parking(Base):
 class Breakdown(Base):
     __tablename__ = 'breakdowns'
     breakdown_id = Column(Integer, primary_key=True, index=True)
-    equipment_id = Column(Integer, nullable=False)
+    item_id = Column(Integer, nullable=False)
     reported_date = Column(TIMESTAMP, nullable=False)
     breakdown_type = Column(String, nullable=False)
     description = Column(Text, nullable=False)
