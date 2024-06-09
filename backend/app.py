@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from backend.send_response import send_response_to_user
+from backend.send_response import send_response_to_user, send_promocode
 from backend.models import (
     Base, engine, SessionLocal, Item, Employee, Client, SupportTicket, Parking, Breakdown, CourierSchedule,
     SupportResponse
@@ -39,7 +39,7 @@ def get_db():
         db.close()
 
 
-def check_access_level(lower: int, higher:int):
+def check_access_level(lower: int, higher: int):
     def access_level_dependency(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
         user_id = int(token)
         user = db.query(Employee).filter(Employee.employee_id == user_id).first()
@@ -70,9 +70,11 @@ async def get_user_data(token: str = Depends(oauth2_scheme), db: Session = Depen
 
 @app.get("/appeals", response_model=AppealsResponse)
 async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
-                       user: Employee = Depends(check_access_level(1,2))):
+                       user: Employee = Depends(check_access_level(1, 2))):
     appeals_waiting = db.query(SupportTicket).filter(SupportTicket.status == 'waiting').offset(skip).limit(limit).all()
-    appeals_processing = db.query(SupportTicket).filter(SupportTicket.status == 'in processing').offset(skip).limit(
+    appeals_processing = db.query(SupportTicket).filter(
+        SupportTicket.assigned_technician_id == user.employee_id).filter(
+        SupportTicket.status == 'in processing').offset(skip).limit(
         limit).all()
 
     appeals_waiting_response = [AppealResponse.from_orm(appeal) for appeal in appeals_waiting]
@@ -102,7 +104,8 @@ async def create_appeal(email: str = Form(...), category: str = Form(...), descr
 
 
 @app.get("/appeals/{appeal_id}", response_model=AppealResponse)
-async def read_appeal(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1,2))):
+async def read_appeal(appeal_id: int, db: Session = Depends(get_db),
+                      user: Employee = Depends(check_access_level(1, 2))):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal is None:
         raise HTTPException(status_code=404, detail="Appeal not found")
@@ -111,7 +114,7 @@ async def read_appeal(appeal_id: int, db: Session = Depends(get_db), user: Emplo
 
 @app.post("/appeals/{appeal_id}/update_type")
 async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Session = Depends(get_db),
-                             user: Employee = Depends(check_access_level(1,2))):
+                             user: Employee = Depends(check_access_level(1, 2))):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal:
         appeal.category = category
@@ -120,39 +123,120 @@ async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Sess
     raise HTTPException(status_code=404, detail="Appeal not found")
 
 
-@app.post("/send_message/{appeal_id}")
-async def send_message(appeal_id: int, operator_id: int = Form(...), message: str = Form(...),
-                       db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1,2))):
-    # Try to find an existing response
-    response = db.query(SupportResponse).filter(SupportResponse.ticket_id == appeal_id).first()
+@app.post("/appeals/{appeal_id}/update_status")
+async def update_appeal_type(appeal_id: int, status: str = Form(...), db: Session = Depends(get_db), ):
+    appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
+    if appeal:
+        appeal.status = status
+        db.commit()
+        return JSONResponse(status_code=200, content={"message": "Appeal type updated"})
+    raise HTTPException(status_code=404, detail="Appeal not found")
+
+
+@app.get("/appeals/available_operators/{appeal_id}")
+async def get_available_operators(appeal_id: int, db: Session = Depends(get_db),
+                                  user: Employee = Depends(check_access_level(1, 2))):
+    current_operator_id = user.employee_id
+    available_operators = db.query(Employee).filter(
+        Employee.access_level.in_([1, 2]),
+        Employee.employee_id != current_operator_id
+    ).all()
+
+    operators_list = [{"id": operator.employee_id, "username": operator.username} for operator in available_operators]
+    return JSONResponse(status_code=200, content={"status": "success", "operators": operators_list})
+
+
+@app.post("/transfer_appeal/{appeal_id}")
+async def update_actual_operator(appeal_id: int, new_operator_id: int = Form(...), db: Session = Depends(get_db), ):
+    appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
+    if appeal:
+        appeal.assigned_technician_id = new_operator_id
+        db.commit()
+        return JSONResponse(status_code=200, content={"message": "Appeal type updated"})
+    raise HTTPException(status_code=404, detail="Appeal not found")
+
+
+@app.post("/close_appeal/{appeal_id}")
+async def close_appeal(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1, 2))):
+    text = 'Если вопрос был решен, то не отвечайте, пожалуйста, на это сообщение — так я смогу помочь другим клиентам быстрее 🛴'
+    send_response_to_user(text, appeal_id)
+
+    response = SupportResponse(
+        ticket_id=appeal_id,
+        operator_id=user.employee_id,
+        message=text,
+        created_at=datetime.utcnow()
+    )
+    db.add(response)
+
+    db.commit()
+    db.refresh(response)
 
     if response:
-        # If a response exists, update it
-        response.message = message
-        response.created_at = datetime.utcnow()
-    else:
-        # Otherwise, create a new response
-        response = SupportResponse(
-            ticket_id=appeal_id,
-            operator_id=operator_id,
-            message=message,
-            created_at=datetime.utcnow()
-        )
-        db.add(response)
+        return JSONResponse(status_code=200, content={"status": "success", "message": 'closed'})
+    raise HTTPException(status_code=404, detail="Response not found")
+
+
+@app.get("/appeals/{appeal_id}/messages")
+def get_messages(appeal_id: int, db: Session = Depends(get_db)):
+    responses = db.query(SupportResponse).filter_by(ticket_id=appeal_id).all()
+    messages = []
+    for response in responses:
+        if response.operator_id != -1:
+            user = db.query(Employee).filter_by(employee_id=response.operator_id).first()
+            sender = user.username if user else f"User ID: {response.operator_id}"
+        else:
+            sender = f"User ID: {response.operator_id}"
+        messages.append({
+            "message": response.message,
+            "promo_code": response.promo_code,
+            "sender": sender,
+            "operator_id": response.operator_id
+        })
+    return messages
+
+
+@app.post("/send_message/{appeal_id}")
+async def send_message(appeal_id: int, operator_id: int = Form(...), message: str = Form(...),
+                       db: Session = Depends(get_db)):
+    response = SupportResponse(
+        ticket_id=appeal_id,
+        operator_id=operator_id,
+        message=message,
+        created_at=datetime.utcnow()
+    )
+    db.add(response)
 
     db.commit()
     db.refresh(response)  # Refresh the response to get updated data
 
-    # Send the response to the user (assuming send_response_to_user is defined elsewhere)
-    send_response_to_user(text=message, appeal_id=appeal_id, promocode=response.promo_code)
+    if operator_id != -1:
+        send_response_to_user(text=message, appeal_id=appeal_id, promocode=response.promo_code)
+        response = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
+        response.status = 'in processing'
+        response.assigned_technician_id = operator_id
+        db.commit()
 
     return JSONResponse(status_code=200, content={"status": "success", "message": "Message sent"})
 
 
 @app.post("/add_promocode/{appeal_id}")
-async def add_promocode(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1, 2))):
+async def add_promocode(appeal_id: int, db: Session = Depends(get_db),
+                        user: Employee = Depends(check_access_level(1, 2))):
     promo_code = str(uuid.uuid4())
-    response = db.query(SupportResponse).filter(SupportResponse.ticket_id == appeal_id).first()
+    send_promocode(appeal_id, promo_code)
+
+    response = SupportResponse(
+        ticket_id=appeal_id,
+        operator_id=user.employee_id,
+        message=f'Извините за неудобства, ваш промокод на бесплатную поездку: **********',
+        created_at=datetime.utcnow()
+    )
+    db.add(response)
+
+    db.commit()
+    db.refresh(response)
+
     if response:
         response.promo_code = promo_code
         db.commit()
@@ -171,7 +255,7 @@ async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
 
 @app.post("/employees/", response_model=EmployeeCreate)
 async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db),
-                          user: Employee = Depends(check_access_level(0,0))):
+                          user: Employee = Depends(check_access_level(0, 0))):
     db_employee = Employee(
         first_name=employee.first_name,
         last_name=employee.last_name,
@@ -196,7 +280,7 @@ async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db
 
 @app.post("/clients/", response_model=ClientCreate)
 async def create_client(client: ClientCreate, db: Session = Depends(get_db),
-                        user: Employee = Depends(check_access_level(0,0))):
+                        user: Employee = Depends(check_access_level(0, 0))):
     db_client = Client(**client.dict())
     db.add(db_client)
     db.commit()
@@ -215,7 +299,7 @@ async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depen
 
 @app.post("/parkings/", response_model=ParkingCreate)
 async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db),
-                         user: Employee = Depends(check_access_level(0,0))):
+                         user: Employee = Depends(check_access_level(0, 0))):
     db_parking = Parking(**parking.dict())
     db.add(db_parking)
     db.commit()
@@ -235,9 +319,10 @@ async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get
 # Получение списка поломок
 @app.get("/breakdowns")
 def read_breakdowns(query: str = None, db: Session = Depends(get_db),
-                        user: Employee = Depends(check_access_level(3,3))):
+                    user: Employee = Depends(check_access_level(3, 3))):
     if query:
-        breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').filter(Breakdown.item_id == int(query)).all()
+        breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').filter(
+            Breakdown.item_id == int(query)).all()
     else:
         breakdowns = db.query(Breakdown).filter(Breakdown.status != 'resolved').all()
     return breakdowns
@@ -246,7 +331,7 @@ def read_breakdowns(query: str = None, db: Session = Depends(get_db),
 # Обновление поломки
 @app.put("/update_breakdown/{breakdown_id}", response_model=BreakdownResponse)
 def update_breakdown(breakdown_id: int, breakdown: BreakdownUpdate, db: Session = Depends(get_db),
-                        user: Employee = Depends(check_access_level(3,3))):
+                     user: Employee = Depends(check_access_level(3, 3))):
     db_breakdown = db.query(Breakdown).filter(Breakdown.breakdown_id == breakdown_id).first()
     if db_breakdown is None:
         raise HTTPException(status_code=404, detail="Breakdown not found")
@@ -268,7 +353,7 @@ async def create_courier_schedule(schedule: CourierScheduleCreate, db: Session =
 
 @app.get("/employees/", response_model=List[EmployeeManage])
 async def read_employees(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
-                         user: Employee = Depends(check_access_level(0,0))):
+                         user: Employee = Depends(check_access_level(0, 0))):
     employees = db.query(Employee).offset(skip).limit(limit).all()
 
     return employees
@@ -276,7 +361,7 @@ async def read_employees(skip: int = 0, limit: int = 10, db: Session = Depends(g
 
 @app.get("/employees/{employee_id}", response_model=EmployeeCreate)
 async def read_employee(employee_id: int, db: Session = Depends(get_db),
-                        user: Employee = Depends(check_access_level(0,0))):
+                        user: Employee = Depends(check_access_level(0, 0))):
     employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
     if employee is None:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -285,7 +370,7 @@ async def read_employee(employee_id: int, db: Session = Depends(get_db),
 
 @app.put("/employees/{employee_id}", response_model=EmployeeCreate)
 async def update_employee(employee_id: int, employee: EmployeeCreate, db: Session = Depends(get_db),
-                          user: Employee = Depends(check_access_level(0,0))):
+                          user: Employee = Depends(check_access_level(0, 0))):
     db_employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
     if db_employee is None:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -302,7 +387,7 @@ async def update_employee(employee_id: int, employee: EmployeeCreate, db: Sessio
 
 @app.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: int, db: Session = Depends(get_db),
-                          user: Employee = Depends(check_access_level(0,0))):
+                          user: Employee = Depends(check_access_level(0, 0))):
     db_employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
     if db_employee is None:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -313,7 +398,7 @@ async def delete_employee(employee_id: int, db: Session = Depends(get_db),
 
 
 @app.get("/statistics", response_model=Dict[str, Any])
-async def get_statistics(db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2,2))):
+async def get_statistics(db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2, 2))):
     # Пример сбора статистики, этот код нужно адаптировать под ваши нужды
     total_employees = db.query(Employee).count()
     total_clients = db.query(Client).count()

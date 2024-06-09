@@ -169,6 +169,7 @@ class BreakdownCreate(BaseModel):
     class Config:
         orm_mode = True
 
+
 class BreakdownUpdate(BaseModel):
     breakdown_type: str
     description: str
@@ -178,6 +179,7 @@ class BreakdownUpdate(BaseModel):
 
     class Config:
         orm_mode = True
+
 
 class BreakdownResponse(BaseModel):
     breakdown_id: int

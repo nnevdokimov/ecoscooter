@@ -7,15 +7,25 @@ TOKEN_Neuron = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'
 API_URL = f'https://api.telegram.org/bot{TOKEN_Neuron}/'
 
 
-def send_response_to_user(text, appeal_id, promocode=None):
-    message = text + f'\nИзвините за неудобства, ваш промокод на бесплатную поездку: {promocode}\n' if promocode else text
+def send_response_to_user(text, appeal_id):
+    method = 'sendMessage'
+    params = {'chat_id': get_chat_id(appeal_id), 'text': text}
+    response = requests.post(API_URL + method, params=params)
+    result = response.json()
 
-    message = f'Ответ по вашему обращению номер {appeal_id} \n' + message
+    if result['ok']:
+        print('Successfully replied')
+    else:
+        print(result)
+        print('Error with replying')
+    return response.json()
 
-    chat_id = get_chat_id(appeal_id)
+
+def send_promocode(appeal_id, promocode):
+    message = f'Извините за неудобства, ваш промокод на бесплатную поездку: {promocode}\n'
 
     method = 'sendMessage'
-    params = {'chat_id': chat_id, 'text': message}
+    params = {'chat_id': get_chat_id(appeal_id), 'text': message}
     response = requests.post(API_URL + method, params=params)
     result = response.json()
 
@@ -28,6 +38,7 @@ def send_response_to_user(text, appeal_id, promocode=None):
 
 
 def get_chat_id(ticket_id):
+    print(ticket_id)
     db = SessionLocal()
     ticket = db.query(SupportTicket).filter(SupportTicket.ticket_id == ticket_id).first()
 

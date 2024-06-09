@@ -90,7 +90,6 @@ class SupportResponse(Base):
     message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     promo_code = Column(String(100))
-    side = Column(Boolean, default=True)
 
     ticket = relationship("SupportTicket", backref="responses")
 

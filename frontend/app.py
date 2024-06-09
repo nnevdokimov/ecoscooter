@@ -2,7 +2,7 @@ import sys
 import os
 from datetime import datetime
 
-from flask import Flask, render_template, redirect, url_for, session, request, flash
+from flask import Flask, render_template, redirect, url_for, session, request, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps
 import requests
@@ -137,7 +137,13 @@ def appeal_details(appeal_id):
     response = requests.get(f"http://localhost:8000/appeals/{appeal_id}", headers=headers)
     if response.status_code == 200:
         appeal = response.json()
-        return render_template('appeal_details.html', appeal=appeal)
+        messages_response = requests.get(f"http://localhost:8000/appeals/{appeal_id}/messages", headers=headers)
+        if messages_response.status_code == 200:
+            messages = messages_response.json()
+            return render_template('appeal_details.html', appeal=appeal, messages=messages, operator_id=current_user.id)
+        else:
+            flash('Не удалось получить сообщения. Попробуйте снова.', 'error')
+            return redirect(url_for('index'))
     else:
         flash('Не удалось получить данные по обращению. Попробуйте снова.', 'error')
         return redirect(url_for('index'))
@@ -164,11 +170,11 @@ def send_message(appeal_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     data = {"message": message, "operator_id": current_user.id}
     response = requests.post(f"http://localhost:8000/send_message/{appeal_id}", headers=headers, data=data)
+    print(response.json(), response.status_code)
     if response.status_code == 200:
-        return redirect(url_for('appeal_details', appeal_id=appeal_id))
+        return jsonify({"status": "success", "message": "Сообщение успешно отправлено."})
     else:
-        flash('Не удалось отправить сообщение. Попробуйте снова.', 'error')
-        return redirect(url_for('index'))
+        return jsonify({"status": "error", "message": "Не удалось отправить сообщение. Попробуйте снова."}), 400
 
 
 @app.route('/add_promocode/<int:appeal_id>', methods=['POST'])
@@ -181,6 +187,82 @@ def add_promocode(appeal_id):
     else:
         flash('Не удалось добавить промокод. Попробуйте снова.', 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/available_operators/<int:appeal_id>', methods=['GET'])
+@access_required(1, 2)
+def available_operators(appeal_id):
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    response = requests.get(f"http://localhost:8000/appeals/available_operators/{appeal_id}", headers=headers)
+    print(response.json(), response.status_code)
+
+    if response.status_code == 200:
+        operators = response.json().get('operators', [])
+        return jsonify({"status": "success", "operators": operators})
+    else:
+        return jsonify({"status": "error", "message": "Не удалось получить список операторов."}), 400
+
+
+@app.route('/transfer_appeal/<int:appeal_id>', methods=['POST'])
+@access_required(1, 2)
+def transfer_appeal(appeal_id):
+    new_operator_id = request.form.get('new_operator_id')
+    if not new_operator_id:
+        flash('ID нового оператора не указан.', 'error')
+        return redirect(url_for('appeal_details', appeal_id=appeal_id))
+
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    data = {'new_operator_id': new_operator_id}
+    response = requests.post(f"http://localhost:8000/transfer_appeal/{appeal_id}", headers=headers, data=data)
+
+    if response.status_code == 200:
+        flash('Обращение успешно переведено на нового оператора.', 'success')
+        return redirect(url_for('appeals', appeal_id=appeal_id))
+    else:
+        flash('Не удалось перевести обращение на нового оператора. Попробуйте снова.', 'error')
+        return redirect(url_for('appeal_details', appeal_id=appeal_id))
+
+
+@app.route('/close_appeal/<int:appeal_id>', methods=['POST'])
+@access_required(1, 2)
+def close_appeal(appeal_id):
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    try:
+        response = requests.post(f"http://localhost:8000/close_appeal/{appeal_id}", headers=headers)
+
+        if response.status_code == 200:
+            return redirect(url_for('appeals'))
+        else:
+            flash('Не удалось закрыть обращение. Попробуйте снова.', 'error')
+            return redirect(url_for('appeal_details', appeal_id=appeal_id))
+    except Exception as e:
+        print(f"Exception occurred: {e}")
+        flash('Произошла ошибка при попытке закрыть обращение.', 'error')
+        return redirect(url_for('appeal_details', appeal_id=appeal_id))
+
+
+@app.route('/create_breakdown/<int:appeal_id>', methods=['POST'])
+@login_required
+def create_breakdown(appeal_id):
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    data = {
+        "item_id": request.form['item_id'],
+        "reported_date": datetime.utcnow().isoformat(),
+        "breakdown_type": request.form['breakdown_type'],
+        "description": request.form['description'],
+        "status": 'on_parking',
+        "reported_by": str(current_user.id),
+        "priority_level": 'medium',
+    }
+
+    response = requests.post("http://localhost:8000/breakdowns/", json=data, headers=headers)
+
+    if response.status_code == 200:
+        flash('Информация о неисправности успешно добавлена.', 'success')
+    else:
+        flash('Произошла ошибка при добавлении информации о неисправности.', 'error')
+
+    return redirect(url_for('appeal_details', appeal_id=appeal_id))
 
 
 @app.route('/edit_employee/<int:employee_id>', methods=['POST'])
@@ -299,11 +381,13 @@ def manage_scooters():
 def update_breakdown(breakdown_id):
     headers = {"Authorization": f"Bearer {session['token']}"}
     data = {
+        'breakdown_type': request.form['breakdown_type'],
+        'description': request.form['description'],
         "status": request.form['status'],
         "maintenance_notes": request.form['maintenance_notes'],
         "priority_level": request.form['priority_level']
     }
-    response = requests.put(f"http://localhost:8000/breakdowns/{breakdown_id}", json=data, headers=headers)
+    response = requests.put(f"http://localhost:8000/update_breakdown/{breakdown_id}", json=data, headers=headers)
     if response.status_code == 200:
         flash('Данные о поломке успешно обновлены.', 'success')
     else:
