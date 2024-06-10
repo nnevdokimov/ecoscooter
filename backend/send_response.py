@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import SessionLocal, Client, SupportTicket
 
-TOKEN_Neuron = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'
+TOKEN_Neuron = 'API_TOKEN'
 API_URL = f'https://api.telegram.org/bot{TOKEN_Neuron}/'
 
 
