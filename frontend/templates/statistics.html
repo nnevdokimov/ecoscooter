@@ -3,29 +3,358 @@
 {% block title %}Статистика{% endblock %}
 
 {% block content %}
-
-
-    <!-- Main Content -->
-    <div class="container">
-        <div class="statistics-container">
-            <h1>Общая Статистика</h1>
-            <div class="stat-item">
-                <strong>Total Employees:</strong> {{ stats.total_employees }}
-            </div>
-            <div class="stat-item">
-                <strong>Total Clients:</strong> {{ stats.total_clients }}
-            </div>
-            <div class="stat-item">
-                <strong>Total Appeals:</strong> {{ stats.total_support_tickets }}
-            </div>
-            <div class="stat-item">
-                <strong>Appeals Waiting:</strong> {{ stats.appeals_waiting }}
-            </div>
-            <div class="stat-item">
-                <strong>Appeals Processing:</strong> {{ stats.appeals_processing }}
-            </div>
-            <!-- Add other statistics as needed -->
+<!-- Main Content -->
+<div class="container">
+    <div class="statistics-container">
+        <h1>Общая Статистика</h1>
+        <div class="stat-item stat-highlight">
+            <strong>Операторов онлайн:</strong> <span class="stat-value">{{ stats.operators_online }}</span>
+        </div>
+        <div class="stat-item">
+            <strong>Всего сотрудников:</strong> <span class="stat-value">{{ stats.total_employees }}</span>
+        </div>
+        <div class="stat-item">
+            <strong>Всего клиентов:</strong> <span class="stat-value">{{ stats.total_clients }}</span>
+        </div>
+        <div class="stat-item">
+            <strong>Всего обращений:</strong> <span class="stat-value">{{ stats.total_support_tickets }}</span>
+        </div>
+        <div class="stat-item">
+            <strong>Обращения в ожидании:</strong> <span class="stat-value">{{ stats.appeals_waiting }}</span>
+        </div>
+        <div class="stat-item">
+            <strong>Обращения в обработке:</strong> <span class="stat-value">{{ stats.appeals_processing }}</span>
         </div>
     </div>
 
+    <!-- Фильтр по дате -->
+    <div class="date-filter">
+        <label for="startDate">Начальная дата:</label>
+        <input type="date" id="startDate">
+        <label for="endDate">Конечная дата:</label>
+        <input type="date" id="endDate">
+        <button onclick="updateCharts()">Применить</button>
+    </div>
+
+    <!-- График: Среднее время до закрытия обращения -->
+    <div class="chart-container">
+        <canvas id="avgTimeToCloseChart"></canvas>
+    </div>
+
+    <!-- График: Среднее время до первого обращения -->
+    <div class="chart-container">
+        <canvas id="avgTimeToFirstResponseChart"></canvas>
+    </div>
+
+    <!-- График: Статистика по дням по количеству типов обращений -->
+    <div class="chart-container">
+        <canvas id="appealTypesChart"></canvas>
+    </div>
+
+    <!-- График: Статистика по выданным промокодам за день -->
+    <div class="chart-container">
+        <canvas id="promoCodesChart"></canvas>
+    </div>
+
+    <!-- График: Количество открытых обращений сейчас -->
+    <div class="chart-container">
+        <canvas id="openAppealsChart"></canvas>
+    </div>
+
+    <!-- График: Количество обращений ожидающих начала -->
+    <div class="chart-container">
+        <canvas id="waitingAppealsChart"></canvas>
+    </div>
+
+    <!-- График: Количество обращений закрытых за сегодня -->
+    <div class="chart-container">
+        <canvas id="closedAppealsTodayChart"></canvas>
+    </div>
+</div>
+
+<!-- Подключение Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-trendline"></script>
+
+<!-- JavaScript для создания графиков -->
+<script>
+    // Данные для графиков (замените их на реальные данные из вашего шаблона)
+    const avgTimeToCloseData = {{ stats.avg_time_to_close | tojson }};
+    const avgTimeToFirstResponseData = {{ stats.avg_time_to_first_response | tojson }};
+    const appealTypesData = {{ stats.appeal_types_by_day | tojson }};
+    const promoCodesData = {{ stats.promo_codes_by_day | tojson }};
+    const openAppealsData = {{ stats.open_appeals | tojson }};
+    const waitingAppealsData = {{ stats.waiting_appeals | tojson }};
+    const closedAppealsTodayData = {{ stats.closed_appeals_today | tojson }};
+
+    let avgTimeToCloseChart, avgTimeToFirstResponseChart, appealTypesChart, promoCodesChart, openAppealsChart, waitingAppealsChart, closedAppealsTodayChart;
+
+    // Функция для создания линейного графика с линией тренда красного цвета
+    function createLineChart(ctx, label, data) {
+        return new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: label,
+                    data: data.values,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    fill: false,
+                    trendlineLinear: {
+                        style: "rgba(255, 0, 0, .8)",
+                        lineStyle: "solid",
+                        width: 2
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Дата'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Время (часы)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Функция для создания бар-графика с линией тренда красного цвета
+    function createBarChart(ctx, label, data) {
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: label,
+                    data: data.values,
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1,
+                    trendlineLinear: {
+                        style: "rgba(255, 0, 0, .8)",
+                        lineStyle: "solid",
+                        width: 2
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Дата'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Количество'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Функция для создания парного бар-графика без линии тренда
+    function createGroupedBarChart(ctx, label, data) {
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: 'Рекомендация',
+                        data: data.values_recommendation,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Замечание',
+                        data: data.values_notice,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Дата'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Количество'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Функция для обновления графиков в зависимости от выбранного интервала времени
+    function updateCharts() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+
+        const filteredAvgTimeToCloseData = filterDataByDate(avgTimeToCloseData, startDate, endDate);
+        const filteredAvgTimeToFirstResponseData = filterDataByDate(avgTimeToFirstResponseData, startDate, endDate);
+        const filteredAppealTypesData = filterDataByDate(appealTypesData, startDate, endDate);
+        const filteredPromoCodesData = filterDataByDate(promoCodesData, startDate, endDate);
+        const filteredOpenAppealsData = filterDataByDate(openAppealsData, startDate, endDate);
+        const filteredWaitingAppealsData = filterDataByDate(waitingAppealsData, startDate, endDate);
+        const filteredClosedAppealsTodayData = filterDataByDate(closedAppealsTodayData, startDate, endDate);
+
+        avgTimeToCloseChart.data.labels = filteredAvgTimeToCloseData.labels;
+        avgTimeToCloseChart.data.datasets[0].data = filteredAvgTimeToCloseData.values;
+        avgTimeToCloseChart.update();
+
+        avgTimeToFirstResponseChart.data.labels = filteredAvgTimeToFirstResponseData.labels;
+        avgTimeToFirstResponseChart.data.datasets[0].data = filteredAvgTimeToFirstResponseData.values;
+        avgTimeToFirstResponseChart.update();
+
+        appealTypesChart.data.labels = filteredAppealTypesData.labels;
+        appealTypesChart.data.datasets[0].data = filteredAppealTypesData.values;
+        appealTypesChart.update();
+
+        promoCodesChart.data.labels = filteredPromoCodesData.labels;
+        promoCodesChart.data.datasets[0].data = filteredPromoCodesData.values;
+        promoCodesChart.update();
+
+        openAppealsChart.data.labels = filteredOpenAppealsData.labels;
+        openAppealsChart.data.datasets[0].data = filteredOpenAppealsData.values;
+        openAppealsChart.update();
+
+        waitingAppealsChart.data.labels = filteredWaitingAppealsData.labels;
+        waitingAppealsChart.data.datasets[0].data = filteredWaitingAppealsData.values;
+        waitingAppealsChart.update();
+
+        closedAppealsTodayChart.data.labels = filteredClosedAppealsTodayData.labels;
+        closedAppealsTodayChart.data.datasets[0].data = filteredClosedAppealsTodayData.values;
+        closedAppealsTodayChart.update();
+    }
+
+    // Функция для фильтрации данных по дате
+    function filterDataByDate(data, startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const filteredLabels = [];
+        const filteredValues = [];
+
+        for (let i = 0; i < data.labels.length; i++) {
+            const date = new Date(data.labels[i]);
+            if (date >= start && date <= end) {
+                filteredLabels.push(data.labels[i]);
+                filteredValues.push(data.values[i]);
+            }
+        }
+
+        return { labels: filteredLabels, values: filteredValues };
+    }
+
+    // Создание графиков
+    avgTimeToCloseChart = createLineChart(document.getElementById('avgTimeToCloseChart'), 'Среднее время до закрытия обращения', avgTimeToCloseData);
+    avgTimeToFirstResponseChart = createLineChart(document.getElementById('avgTimeToFirstResponseChart'), 'Среднее время до первого обращения', avgTimeToFirstResponseData);
+    appealTypesChart = createGroupedBarChart(document.getElementById('appealTypesChart'), 'Статистика по типам обращений', appealTypesData);
+    promoCodesChart = createBarChart(document.getElementById('promoCodesChart'), 'Статистика по выданным промокодам', promoCodesData);
+</script>
+
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .statistics-container {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 20px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+    }
+
+    .statistics-container h1 {
+        text-align: center;
+        color: #333333;
+    }
+
+    .stat-item {
+        font-size: 18px;
+        margin: 5px 0;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .stat-item.stat-highlight {
+        font-size: 22px;
+        font-weight: bold;
+        color: #ff4500;
+        margin-bottom: 15px;
+    }
+
+    .stat-value {
+        font-weight: bold;
+        color: #007bff;
+    }
+
+    .chart-container {
+        width: 100%;
+        height: 600px; /* Увеличение размера графиков */
+        margin-top: 30px;
+    }
+
+    .date-filter {
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .date-filter label {
+        margin-right: 10px;
+    }
+
+    .date-filter button {
+        padding: 5px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .date-filter button:hover {
+        background-color: #0056b3;
+    }
+</style>
 {% endblock %}

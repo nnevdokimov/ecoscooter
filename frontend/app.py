@@ -324,14 +324,15 @@ def manage_employees():
             "access_level": request.form['access_level'],
             "department": request.form['department'],
             "position": request.form['position'],
-            "hire_date": request.form['hire_date'],
+            "hire_date": datetime.utcnow().isoformat(),
             "phone_number": request.form['phone_number'],
             "address": request.form['address'],
             "status": request.form['status'],
-            "last_login_date": request.form['hire_date']
+            "last_login_date": datetime.utcnow().isoformat()
         }
         headers = {"Authorization": f"Bearer {session['token']}"}
         response = requests.post("http://localhost:8000/employees/", json=data, headers=headers)
+        print(response.json())
         if response.status_code == 200:
             return redirect(url_for('manage_employees'))
         else:
@@ -393,6 +394,48 @@ def update_breakdown(breakdown_id):
     else:
         flash('Ошибка при обновлении данных о поломке. Попробуйте снова.', 'error')
     return redirect(url_for('manage_scooters'))
+
+
+@app.route('/courier_schedules')
+@login_required
+def courier_schedules():
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    response = requests.get("http://localhost:8000/couriers", headers=headers)
+    couriers = response.json()
+    return render_template('courier_schedules.html', couriers=couriers)
+
+
+@app.route('/create_courier_schedule', methods=['POST'])
+@login_required
+def create_courier_schedule():
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date')
+    headers = {"Authorization": f"Bearer {session['token']}"}
+
+    schedule_data = {
+        "start_date": start_date,
+        "end_date": end_date
+    }
+
+    try:
+        response = requests.post("http://localhost:8000/courier_schedules/", json=schedule_data, headers=headers)
+        response.raise_for_status()
+
+        try:
+            response_data = response.json()
+            print(start_date, end_date, response_data)
+            if response.status_code == 200:
+                return jsonify({"status": "success", "message": "Расписание успешно создано!"})
+            else:
+                return jsonify(
+                    {"status": "error", "message": "Произошла ошибка при создании расписания."}), response.status_code
+        except ValueError:
+            print('Response content:', response.content)
+            return jsonify({"status": "error", "message": "Произошла ошибка при обработке ответа сервера."}), 500
+
+    except requests.RequestException as e:
+        print(f"Request failed: {e}")
+        return jsonify({"status": "error", "message": "Произошла ошибка при создании расписания."}), 500
 
 
 if __name__ == '__main__':

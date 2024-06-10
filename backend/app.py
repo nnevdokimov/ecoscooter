@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, date
+import random
 from typing import List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -14,23 +15,16 @@ from backend.models import (
 from backend.schemas import (
     ItemCreate, EmployeeCreate, EmployeeManage, ClientCreate, SupportTicketCreate, ParkingCreate, BreakdownCreate,
     CourierScheduleCreate,
-    AppealResponse, AppealsResponse, SupportResponseCreate, SupportResponseResponse, BreakdownResponse, BreakdownUpdate
+    AppealResponse, AppealsResponse, SupportResponseCreate, SupportResponseResponse, BreakdownResponse, BreakdownUpdate,
+    CourierStatusResponse, CourierScheduleResponse
 )
 
-# Create the database tables
 Base.metadata.create_all(bind=engine)
-
-# Initialize password context for hashing passwords
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Create FastAPI app
 app = FastAPI()
-
-# OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
@@ -50,7 +44,7 @@ def check_access_level(lower: int, higher: int):
     return access_level_dependency
 
 
-# Endpoints
+# Авторизация пользователя
 @app.post("/token")
 async def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(Employee).filter(Employee.username == username).first()
@@ -59,6 +53,7 @@ async def login(username: str = Form(...), password: str = Form(...), db: Sessio
     return {"user_id": user.employee_id, "access_token": str(user.employee_id), "token_type": "bearer"}
 
 
+# Получение данных пользователя
 @app.get("/user")
 async def get_user_data(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user_id = int(token)
@@ -68,6 +63,7 @@ async def get_user_data(token: str = Depends(oauth2_scheme), db: Session = Depen
     return {"user_id": user.employee_id, "username": user.username, "access_level": user.access_level}
 
 
+# Получение списка обращений
 @app.get("/appeals", response_model=AppealsResponse)
 async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
                        user: Employee = Depends(check_access_level(1, 2))):
@@ -83,6 +79,7 @@ async def read_appeals(skip: int = 0, limit: int = 10, db: Session = Depends(get
     return AppealsResponse(appeals_waiting=appeals_waiting_response, appeals_processing=appeals_processing_response)
 
 
+# Создание нового обращения
 @app.post("/appeals/", response_model=AppealResponse)
 async def create_appeal(email: str = Form(...), category: str = Form(...), description: str = Form(...),
                         db: Session = Depends(get_db)):
@@ -103,6 +100,7 @@ async def create_appeal(email: str = Form(...), category: str = Form(...), descr
     return AppealResponse.from_orm(db_appeal)
 
 
+# Получение конкретного обращения
 @app.get("/appeals/{appeal_id}", response_model=AppealResponse)
 async def read_appeal(appeal_id: int, db: Session = Depends(get_db),
                       user: Employee = Depends(check_access_level(1, 2))):
@@ -112,6 +110,7 @@ async def read_appeal(appeal_id: int, db: Session = Depends(get_db),
     return AppealResponse.from_orm(appeal)
 
 
+# Обновление типа обращения
 @app.post("/appeals/{appeal_id}/update_type")
 async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Session = Depends(get_db),
                              user: Employee = Depends(check_access_level(1, 2))):
@@ -123,8 +122,9 @@ async def update_appeal_type(appeal_id: int, category: str = Form(...), db: Sess
     raise HTTPException(status_code=404, detail="Appeal not found")
 
 
+# Обновление статуса обращения
 @app.post("/appeals/{appeal_id}/update_status")
-async def update_appeal_type(appeal_id: int, status: str = Form(...), db: Session = Depends(get_db), ):
+async def update_appeal_type(appeal_id: int, status: str = Form(...), db: Session = Depends(get_db)):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal:
         appeal.status = status
@@ -133,6 +133,7 @@ async def update_appeal_type(appeal_id: int, status: str = Form(...), db: Sessio
     raise HTTPException(status_code=404, detail="Appeal not found")
 
 
+# Получение списка доступных операторов
 @app.get("/appeals/available_operators/{appeal_id}")
 async def get_available_operators(appeal_id: int, db: Session = Depends(get_db),
                                   user: Employee = Depends(check_access_level(1, 2))):
@@ -146,8 +147,9 @@ async def get_available_operators(appeal_id: int, db: Session = Depends(get_db),
     return JSONResponse(status_code=200, content={"status": "success", "operators": operators_list})
 
 
+# Перенос обращения к другому оператору
 @app.post("/transfer_appeal/{appeal_id}")
-async def update_actual_operator(appeal_id: int, new_operator_id: int = Form(...), db: Session = Depends(get_db), ):
+async def update_actual_operator(appeal_id: int, new_operator_id: int = Form(...), db: Session = Depends(get_db)):
     appeal = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
     if appeal:
         appeal.assigned_technician_id = new_operator_id
@@ -156,8 +158,10 @@ async def update_actual_operator(appeal_id: int, new_operator_id: int = Form(...
     raise HTTPException(status_code=404, detail="Appeal not found")
 
 
+# Закрытие обращения
 @app.post("/close_appeal/{appeal_id}")
-async def close_appeal(appeal_id: int, db: Session = Depends(get_db), user: Employee = Depends(check_access_level(1, 2))):
+async def close_appeal(appeal_id: int, db: Session = Depends(get_db),
+                       user: Employee = Depends(check_access_level(1, 2))):
     text = 'Если вопрос был решен, то не отвечайте, пожалуйста, на это сообщение — так я смогу помочь другим клиентам быстрее 🛴'
     send_response_to_user(text, appeal_id)
 
@@ -177,6 +181,7 @@ async def close_appeal(appeal_id: int, db: Session = Depends(get_db), user: Empl
     raise HTTPException(status_code=404, detail="Response not found")
 
 
+# Получение сообщений по обращению
 @app.get("/appeals/{appeal_id}/messages")
 def get_messages(appeal_id: int, db: Session = Depends(get_db)):
     responses = db.query(SupportResponse).filter_by(ticket_id=appeal_id).all()
@@ -196,6 +201,7 @@ def get_messages(appeal_id: int, db: Session = Depends(get_db)):
     return messages
 
 
+# Отправка сообщения по обращению
 @app.post("/send_message/{appeal_id}")
 async def send_message(appeal_id: int, operator_id: int = Form(...), message: str = Form(...),
                        db: Session = Depends(get_db)):
@@ -208,10 +214,10 @@ async def send_message(appeal_id: int, operator_id: int = Form(...), message: st
     db.add(response)
 
     db.commit()
-    db.refresh(response)  # Refresh the response to get updated data
+    db.refresh(response)
 
     if operator_id != -1:
-        send_response_to_user(text=message, appeal_id=appeal_id, promocode=response.promo_code)
+        send_response_to_user(text=message, appeal_id=appeal_id)
         response = db.query(SupportTicket).filter(SupportTicket.ticket_id == appeal_id).first()
         response.status = 'in processing'
         response.assigned_technician_id = operator_id
@@ -220,6 +226,7 @@ async def send_message(appeal_id: int, operator_id: int = Form(...), message: st
     return JSONResponse(status_code=200, content={"status": "success", "message": "Message sent"})
 
 
+# Добавление промокода по обращению
 @app.post("/add_promocode/{appeal_id}")
 async def add_promocode(appeal_id: int, db: Session = Depends(get_db),
                         user: Employee = Depends(check_access_level(1, 2))):
@@ -244,6 +251,7 @@ async def add_promocode(appeal_id: int, db: Session = Depends(get_db),
     raise HTTPException(status_code=404, detail="Response not found")
 
 
+# Создание нового предмета
 @app.post("/items/", response_model=ItemCreate)
 async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
     db_item = Item(**item.dict())
@@ -253,9 +261,9 @@ async def create_item(item: ItemCreate, db: Session = Depends(get_db)):
     return db_item
 
 
+# Создание нового сотрудника
 @app.post("/employees/", response_model=EmployeeCreate)
-async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db),
-                          user: Employee = Depends(check_access_level(0, 0))):
+async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db)):
     db_employee = Employee(
         first_name=employee.first_name,
         last_name=employee.last_name,
@@ -278,6 +286,7 @@ async def create_employee(employee: EmployeeCreate, db: Session = Depends(get_db
     return db_employee
 
 
+# Создание нового клиента
 @app.post("/clients/", response_model=ClientCreate)
 async def create_client(client: ClientCreate, db: Session = Depends(get_db),
                         user: Employee = Depends(check_access_level(0, 0))):
@@ -288,6 +297,7 @@ async def create_client(client: ClientCreate, db: Session = Depends(get_db),
     return db_client
 
 
+# Создание нового тикета поддержки
 @app.post("/support_tickets/", response_model=SupportTicketCreate)
 async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depends(get_db)):
     db_ticket = SupportTicket(**ticket.dict())
@@ -297,6 +307,7 @@ async def create_support_ticket(ticket: SupportTicketCreate, db: Session = Depen
     return db_ticket
 
 
+# Создание новой парковки
 @app.post("/parkings/", response_model=ParkingCreate)
 async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db),
                          user: Employee = Depends(check_access_level(0, 0))):
@@ -307,6 +318,7 @@ async def create_parking(parking: ParkingCreate, db: Session = Depends(get_db),
     return db_parking
 
 
+# Создание новой поломки
 @app.post("/breakdowns/", response_model=BreakdownCreate)
 async def create_breakdown(breakdown: BreakdownCreate, db: Session = Depends(get_db)):
     db_breakdown = Breakdown(**breakdown.dict())
@@ -342,23 +354,101 @@ def update_breakdown(breakdown_id: int, breakdown: BreakdownUpdate, db: Session 
     return db_breakdown
 
 
-@app.post("/courier_schedules/", response_model=CourierScheduleCreate)
-async def create_courier_schedule(schedule: CourierScheduleCreate, db: Session = Depends(get_db)):
-    db_schedule = CourierSchedule(**schedule.dict())
-    db.add(db_schedule)
+# Получение списка курьеров
+@app.get("/couriers", response_model=List[CourierStatusResponse])
+def get_couriers(db: Session = Depends(get_db)):
+    couriers = db.query(Employee).filter(Employee.position == 'courier').all()
+    today = date.today()
+    courier_statuses = []
+
+    for courier in couriers:
+        schedule = db.query(CourierSchedule).filter(
+            CourierSchedule.courier_id == courier.employee_id,
+            CourierSchedule.date == today
+        ).first()
+
+        if schedule:
+            if schedule.start_time and not schedule.end_time:
+                status = 'Начал объезд'
+            elif schedule.start_time and schedule.end_time:
+                status = 'Объезд окончен'
+            else:
+                status = 'Рабочий день не начат'
+        else:
+            status = 'Рабочий день не начат'
+
+        courier_statuses.append({
+            "courier_id": courier.employee_id,
+            "name": f"{courier.first_name} {courier.last_name}",
+            "status": status
+        })
+
+    return courier_statuses
+
+
+# Создание расписания для курьеров
+@app.post("/courier_schedules/", response_model=CourierScheduleResponse)
+def create_courier_schedule(data: CourierScheduleCreate, db: Session = Depends(get_db)):
+    start_date = datetime.strptime(data.start_date, '%Y-%m-%d').date()
+    end_date = datetime.strptime(data.end_date, '%Y-%m-%d').date()
+
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="End date must be after start date")
+
+    couriers = db.query(Employee).filter(Employee.position == 'courier').all()
+    parkings = db.query(Parking).filter(Parking.status == 'Active').all()
+
+    if not couriers or not parkings:
+        raise HTTPException(status_code=400, detail="No couriers or parkings available")
+
+    days = (end_date - start_date).days + 1
+    num_couriers = len(couriers)
+    num_parkings = len(parkings)
+    parkings_per_courier = num_parkings // num_couriers
+
+    for i in range(days):
+        current_date = start_date + timedelta(days=i)
+        for j, courier in enumerate(couriers):
+            start_index = j * parkings_per_courier
+            end_index = (j + 1) * parkings_per_courier if j != num_couriers - 1 else num_parkings
+            courier_parkings = parkings[start_index:end_index]
+
+            parking_ids = ",".join([str(parking.parking_id) for parking in courier_parkings])
+
+            existing_schedule = db.query(CourierSchedule).filter(
+                CourierSchedule.courier_id == courier.employee_id,
+                CourierSchedule.date == current_date
+            ).first()
+
+            if existing_schedule:
+                existing_schedule.parking_ids = parking_ids
+            else:
+                schedule = CourierSchedule(
+                    courier_id=courier.employee_id,
+                    date=current_date,
+                    parking_ids=parking_ids
+                )
+                db.add(schedule)
+
     db.commit()
-    db.refresh(db_schedule)
-    return db_schedule
+
+    return {
+        "status": "success",
+        "message": "Courier schedule created successfully",
+        "start_date": data.start_date,
+        "end_date": data.end_date
+    }
 
 
+# Получение списка сотрудников
 @app.get("/employees/", response_model=List[EmployeeManage])
 async def read_employees(skip: int = 0, limit: int = 10, db: Session = Depends(get_db),
                          user: Employee = Depends(check_access_level(0, 0))):
     employees = db.query(Employee).offset(skip).limit(limit).all()
-
     return employees
 
 
+# Получение информации о конкретном сотруднике
 @app.get("/employees/{employee_id}", response_model=EmployeeCreate)
 async def read_employee(employee_id: int, db: Session = Depends(get_db),
                         user: Employee = Depends(check_access_level(0, 0))):
@@ -368,6 +458,7 @@ async def read_employee(employee_id: int, db: Session = Depends(get_db),
     return employee
 
 
+# Обновление информации о сотруднике
 @app.put("/employees/{employee_id}", response_model=EmployeeCreate)
 async def update_employee(employee_id: int, employee: EmployeeCreate, db: Session = Depends(get_db),
                           user: Employee = Depends(check_access_level(0, 0))):
@@ -385,39 +476,77 @@ async def update_employee(employee_id: int, employee: EmployeeCreate, db: Sessio
     return db_employee
 
 
+# Удаление сотрудника
 @app.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: int, db: Session = Depends(get_db),
                           user: Employee = Depends(check_access_level(0, 0))):
     db_employee = db.query(Employee).filter(Employee.employee_id == employee_id).first()
     if db_employee is None:
         raise HTTPException(status_code=404, detail="Employee not found")
-
     db.delete(db_employee)
     db.commit()
     return JSONResponse(status_code=200, content={"message": "Employee deleted"})
 
 
+# Получение статистики
 @app.get("/statistics", response_model=Dict[str, Any])
 async def get_statistics(db: Session = Depends(get_db), user: Employee = Depends(check_access_level(2, 2))):
-    # Пример сбора статистики, этот код нужно адаптировать под ваши нужды
-    total_employees = db.query(Employee).count()
-    total_clients = db.query(Client).count()
-    total_support_tickets = db.query(SupportTicket).count()
-    appeals_waiting = db.query(SupportTicket).filter(SupportTicket.status == 'waiting').count()
-    appeals_processing = db.query(SupportTicket).filter(SupportTicket.status == 'in processing').count()
+    def generate_date_list(start_date, days):
+        return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
 
-    statistics = {
-        "total_employees": total_employees,
-        "total_clients": total_clients,
-        "total_support_tickets": total_support_tickets,
-        "appeals_waiting": appeals_waiting,
-        "appeals_processing": appeals_processing,
-        # Добавьте другие необходимые метрики
+    start_date = datetime.now() - timedelta(days=100)
+    date_labels = generate_date_list(start_date, 100)
+
+    def generate_random_values(size, min_val, max_val):
+        return [round(random.uniform(min_val, max_val), 2) for _ in range(size)]
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    today_open_appeals = random.randint(5, 15)
+    today_waiting_appeals = random.randint(1, 10)
+    today_closed_appeals = random.randint(5, 25)
+
+    stats = {
+        "total_employees": 100,
+        "total_clients": 200,
+        "total_support_tickets": 150,
+        "appeals_waiting": 10,
+        "appeals_processing": 5,
+        "operators_online": 8,
+        "avg_time_to_close": {
+            "labels": date_labels,
+            "values": generate_random_values(100, 1, 5)
+        },
+        "avg_time_to_first_response": {
+            "labels": date_labels,
+            "values": generate_random_values(100, 0.5, 2)
+        },
+        "appeal_types_by_day": {
+            "labels": date_labels,
+            "values_recommendation": generate_random_values(100, 10, 50),
+            "values_notice": generate_random_values(100, 10, 50)
+        },
+        "promo_codes_by_day": {
+            "labels": date_labels,
+            "values": generate_random_values(100, 5, 20)
+        },
+        "open_appeals": {
+            "labels": date_labels + [today],
+            "values": generate_random_values(100, 5, 15) + [today_open_appeals]
+        },
+        "waiting_appeals": {
+            "labels": date_labels + [today],
+            "values": generate_random_values(100, 1, 10) + [today_waiting_appeals]
+        },
+        "closed_appeals_today": {
+            "labels": date_labels + [today],
+            "values": generate_random_values(100, 5, 25) + [today_closed_appeals]
+        }
     }
 
-    return statistics
+    return stats
 
 
+# Базовый маршрут
 @app.get("/")
 def read_root():
     return {"Hello": "World"}

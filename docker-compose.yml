@@ -1,0 +1,38 @@
+version: '3.11'
+networks:
+  api_net:
+    external: true
+
+services:
+  ecoscooter-core:
+    container_name: ecoscooter-core
+    command: gunicorn backend.app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    environment:
+      - DATABASE_HOST=
+      - DATABASE_PORT=
+      - DATABASE_USER=
+      - DATABASE_PASSWORD=
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: always
+
+  ecoscooter-web:
+    container_name: ecoscooter-web
+    command: gunicorn -w 4 -b 0.0.0.0:8080 frontend.app:app
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: always
+
+  tg-support:
+    container_name: tg-support
+    command: python3 tg/support_bot.py
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: always
+
+  tg-courier:
+    container_name: tg-courier
+    command: python3 tg/delivery_bot.py
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: always

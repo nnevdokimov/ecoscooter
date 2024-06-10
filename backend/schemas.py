@@ -195,14 +195,18 @@ class BreakdownResponse(BaseModel):
 
 
 class CourierScheduleCreate(BaseModel):
-    courier_id: int
-    date: datetime
-    start_time: datetime
-    end_time: datetime
-    parking_ids: Optional[str] = None
-    total_distance: Optional[int] = None
-    route_details: Optional[str] = None
-    special_instructions: Optional[str] = None
+    start_date: str
+    end_date: str
 
-    class Config:
-        from_attributes = True
+
+class CourierStatusResponse(BaseModel):
+    courier_id: int
+    name: str
+    status: str
+
+
+class CourierScheduleResponse(BaseModel):
+    status: str
+    message: str
+    start_date: str
+    end_date: str

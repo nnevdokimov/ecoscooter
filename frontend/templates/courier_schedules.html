@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Управление расписанием курьеров{% endblock %}
+
+{% block content %}
+<div class="container courier-schedule-container">
+    <h1>Управление расписанием курьеров</h1>
+    <div class="courier-list">
+        {% for courier in couriers %}
+        <div class="courier-block">
+            <p><strong>Курьер:</strong> {{ courier.name }}</p>
+            <p><strong>Статус:</strong> {{ courier.status }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="schedule-form-container">
+        <h2>Создать расписание для курьеров</h2>
+        <form id="createScheduleForm" action="{{ url_for('create_courier_schedule') }}" method="post">
+            <div class="form-group">
+                <label for="start_date">Дата начала: <span class="required">*</span></label>
+                <input type="date" name="start_date" id="start_date" required>
+            </div>
+
+            <div class="form-group">
+                <label for="end_date">Дата конца: <span class="required">*</span></label>
+                <input type="date" name="end_date" id="end_date" required>
+            </div>
+            <button type="submit">Создать расписание</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.getElementById('createScheduleForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        var formData = new FormData(this);
+        var startDate = formData.get('start_date');
+        var endDate = formData.get('end_date');
+
+        fetch('/create_courier_schedule', {
+            method: 'POST',
+            body: new URLSearchParams({ 'start_date': startDate, 'end_date': endDate }),
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Расписание успешно создано!');
+                location.reload();
+            } else {
+                alert('Произошла ошибка при создании расписания.');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Произошла ошибка при создании расписания.');
+        });
+    });
+</script>
+
+<style>
+    .courier-schedule-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .courier-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .courier-block {
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+    }
+
+    .schedule-form-container {
+        margin-top: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    .required {
+        color: red;
+    }
+
+    .schedule-form-container button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .schedule-form-container button:hover {
+        background-color: #0056b3;
+    }
+</style>
+{% endblock %}
