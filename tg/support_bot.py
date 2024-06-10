@@ -6,7 +6,7 @@ from aiogram.dispatcher.middlewares import BaseMiddleware
 import aiohttp
 import asyncio
 
-API_TOKEN = '6476293936:AAFHclxqvsL3pLEXnhD6O3FqNokpKqzlwek'
+API_TOKEN = 'API_TOKEN'
 
 logging.basicConfig(level=logging.INFO)
 
