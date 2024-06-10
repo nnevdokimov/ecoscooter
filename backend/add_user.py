@@ -3,7 +3,6 @@ from getpass import getpass
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
-# Add the project root directory to the sys.path
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
