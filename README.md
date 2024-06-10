@@ -62,7 +62,7 @@ project-root/
    docker-compose up
    ```
 
-Приложение будет доступно по адресу `http://localhost:8000`, а так же в боте `https://t.me/scooter_support_bot`.
+Приложение будет доступно по адресу `http://localhost:8080`, а так же в боте `https://t.me/scooter_support_bot` и `https://t.me/EcoScooterCurierBot`.
 
 ### Запуск Локально для Разработки
 
@@ -86,10 +86,11 @@ project-root/
    python frontend/app.py
    ```
 
-4. **Запустите Telegram Бота**:
+4. **Запустите Telegram Ботов**:
 
    ```sh
    python tg/support_bot.py
+   python tg/delivery_bot.py
    ```
 
 ## Основные Функции
